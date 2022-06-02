@@ -1,0 +1,48 @@
+#+TITLE: Pesquisa - Análise da produção científica da UFRJ: um comparativo com diferentes fontes informacionais
+#+AUTHOR: Gabriel Alves Vieira
+#+BIBLIOGRAPHY: Bibliometry apalike
+
+* Idéia Geral
+- Obter os dados da produção da UFRJ em diferentes bancos de dados acadêmicos e compará-los em termos de:
+  + Cobertura
+  + Métricas
+- A comparação será feita tanto a nível institucional (toda a produção), quanto a nível de assunto/disciplina.
+- As seguintes plataformas serão utilizadas (até que não sejam mais):
+  + Socpus
+  + Web of Science
+  + Dimensions
+  + Microsof Academic
+
+
+* Análises/perguntas adicionais
+** Será que a UFRJ está preparada/se adequando com relação ao Plan S?
+- Saber quando o Plan S foi anunciado seria interessante para fazer o recorte temporal
+- Isso requereria fazer uma análise da proporção de artigos abertos nos diferentes padrões (ouro, verde, etc...) ao longo dos anos
+
+
+* Semana do dia 01/06/2022
+** Recuperando dados das plataformas para a UFRJ
+*** Scopus
+- Dentre seus filtros, há o **AF-ID (Affiliation ID)**, um identificador único atribuído às organizações afiliadas aos autores.
+  + É possível usar o [[\[\[https://www.scopus.com/search/form.uri?display=affiliationLookup#affiliation\]\]][Scopus affiliation search]] para obter o AF-ID de uma instituição.
+  + No caso da UFRJ, o AF-ID é **60000036**
+- Também há o campo do **DOI** e um **Scopus Author Identifier**, que provê identificadores únicos para publicações e autores.
+- Uma limitação do Scopus é que ele retorna apenas os primeiros 2000 resultados. Se pelo menos ele picotasse os resultados em arquivos distintos...
+- Aparentemente, uma boa combinação de filtros para obter arquivos com menos do que 500 records é instituição + ano + autor...
+**** Scopus API
+- Já tenho uma key, graças ao login institucional.
+*** Web of Science
+- Aparentemente, sem acesso algum à API sem ter que pagar.
+- Mesmo acessar a search engine eu ainda não consegui...
+*** Dimensions
+- Dá pra ganhar uma chave API para [[https://www.dimensions.ai/scientometric-research][pesquisa cientométrica]].
+- Não parece ter um identificador único para instituição.
+- Entretanto, tem uma API gratuita para pegar o **número de citações por publicação**. Com isso, já **daria para calcular h-index e outras métricas**.
+  - É bem simples e pode usar tanto DOI quanto PMID (PubMed ID) ou Dimensions ID.
+  - [[https://metrics-api.dimensions.ai/doi/10.7717/peerj.6271][Exemplo com o DOI]]
+- A altmetria por artigo aparentemente pode ser obtida usando a [[https://docs.dimensions.ai/dsl/examples.html#altmetric][API paga]].
+- Imagino que tenha como recuperar a **lista de citações** com a API tbm.
+
+*** Microsoft Academic
+- Aparentemente, ela não está mais funcionando...
+- "Editor’s note, May 4, 2021 – In a recent blog post, it was announced the **Microsoft Academic website and underlying APIs will be retired on Dec. 31, 2021**."

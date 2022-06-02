@@ -8,3 +8,7 @@ Cobertura da produção científica da UFRJ em diferentes databases
 
 
 - Olhar os [dados abertos da CAPES](https://dadosabertos.capes.gov.br/) para ver se tem algo que dê para usar (em especial, a seção de avaliação da Pós-Graduação Stricto Sensu)
+
+- Nova idéia: Usar o campo "instuição" para recuperar toda a informação da UFRJ.
+	- Cada database tem 100%. Não vai ter uma tentativa de chegar no "dataset definitivo" de toda a produção científica da UFRJ através, por exemplo, do Lattes.
+- Tentar baixar/lidar com os dados das diferentes plataformas.
