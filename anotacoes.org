@@ -36,12 +36,17 @@
 - Mesmo acessar a search engine eu ainda não consegui...
 *** Dimensions
 - Dá pra ganhar uma chave API para [[https://www.dimensions.ai/scientometric-research][pesquisa cientométrica]].
+  - Obs: Eu **não posso disponibilizar os dados baixados da Dimensions**. Lembrar de só manter o código necessário para baixar ele.
+  - A Dimensions tem uma página ([[https://api-lab.dimensions.ai/][Dimensions API Labs]]) com vários **Jupyter Notebooks** que mostram como usar a API. Quando tiver a key, **dar uma olhada lá para ver se algo pode ser adaptado pro meu uso**.
 - Não parece ter um identificador único para instituição.
 - Entretanto, tem uma API gratuita para pegar o **número de citações por publicação**. Com isso, já **daria para calcular h-index e outras métricas**.
   - É bem simples e pode usar tanto DOI quanto PMID (PubMed ID) ou Dimensions ID.
   - [[https://metrics-api.dimensions.ai/doi/10.7717/peerj.6271][Exemplo com o DOI]]
 - A altmetria por artigo aparentemente pode ser obtida usando a [[https://docs.dimensions.ai/dsl/examples.html#altmetric][API paga]].
 - Imagino que tenha como recuperar a **lista de citações** com a API tbm.
+- Usa o [[https://www.grid.ac/][GRID]] como **identificador único institucional**
+  - GRID para "Federal University of Rio de Janeiro": **grid.8536.8**
+
 
 *** Microsoft Academic
 - Aparentemente, ela não está mais funcionando...
