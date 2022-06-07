@@ -16,7 +16,7 @@
 
 * Análises/perguntas adicionais
 ** Será que a UFRJ está preparada/se adequando com relação ao Plan S?
-- Saber quando o Plan S foi anunciado seria interessante para fazer o recorte temporal
+- Saber quando o Plan S foi anunciado seria interessante para fazer o recorte temporal. **R: Segundo a wikipedia, 2018**
 - Isso requereria fazer uma análise da proporção de artigos abertos nos diferentes padrões (ouro, verde, etc...) ao longo dos anos
 
 
@@ -28,9 +28,13 @@
   + No caso da UFRJ, o AF-ID é **60000036**
 - Também há o campo do **DOI** e um **Scopus Author Identifier**, que provê identificadores únicos para publicações e autores.
 - Uma limitação do Scopus é que ele retorna apenas os primeiros 2000 resultados. Se pelo menos ele picotasse os resultados em arquivos distintos...
-- Aparentemente, uma boa combinação de filtros para obter arquivos com menos do que 500 records é instituição + ano + autor...
+**** Estratégia de busca ("na mão")
+- Aparentemente, uma boa **combinação de filtros** para obter arquivos com menos do que 2000 records talvez seja **instituição + ano + área**.
+  + Entretanto, se pegarmos [[https://www.scopus.com/results/results.uri?sort=plf-f&src=s&sid=9b25ffb0e296e3dfcb89779e93f9f20e&sot=a&sdt=a&sl=94&s=AF-ID%28%22Universidade+Federal+do+Rio+de+Janeiro%22+60000036%29+AND+PUBYEAR+%3e+2016+AND+PUBYEAR+%3c+2022&origin=searchadvanced&editSaveSearch=&txGid=48bd8fdc332758f37492bfea8ed8b46d][a produção da UFRJ entre 2016-2021]], podemos ver que dá pra baixar toda a produção da maioria dos subjects de uma vez pelo site (menos de 2000 records de Material Science pra baixo)
+  + Os outros 8 campos precisariam de ser divididos por ano para serem baixados (a menos que eu por acaso use a API, para a qual aparentemente o limite é de 5000 por request)
 **** Scopus API
-- Já tenho uma key, graças ao login institucional.
+- Já tenho uma key. Mas a chave para não assinantes vem com mta missing data.
+- Um bom wrapper pra API da Scopus é [[https://pybliometrics.readthedocs.io/en/stable/][pybliometrics]].
 *** Web of Science
 - Aparentemente, sem acesso algum à API sem ter que pagar.
 - Mesmo acessar a search engine eu ainda não consegui...
@@ -51,3 +55,5 @@
 *** Microsoft Academic
 - Aparentemente, ela não está mais funcionando...
 - "Editor’s note, May 4, 2021 – In a recent blog post, it was announced the **Microsoft Academic website and underlying APIs will be retired on Dec. 31, 2021**."
+
+* Semana do dia 06/06/2022

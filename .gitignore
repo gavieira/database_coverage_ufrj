@@ -1,3 +1,6 @@
 .ipynb_checkpoints
 data
 api_keys
+.Rproj.user
+.Rhistory
+*.~lock*
