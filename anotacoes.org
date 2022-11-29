@@ -223,5 +223,16 @@
 
 * Artigo: Large-scale comparison of bibliographic data sources: Scopus, Web of Science, Dimensions, Crossref, and Microsoft Academic
 - Parte que fala das comparações já feitas: Baixar e ler os artigos citados nessa parte.
-** Apresentação
--
+
+* Apesentação sobre o Nextcloud
+- Mostrar funções extras:
+  - Calendario
+  - Email
+  - Contatos e chat
+  - (Claro) Sincronização de arquivos
+    - Criando grupos e círculos (diferença entre os dois?)
+  - Obs: Segundo a [[https://github.com/nextcloud-snap/nextcloud-snap][página do github]], dá pra exportar e importar os dados do servidor entre versões do snap. Isso acaba com minhas preocupações
+- Resolver problemas de segurança:
+  - [[https://docs.nextcloud.com/server/24/admin_manual/installation/harden_server.html][Este link]] pode ajudar
+
+* Dia 08/11

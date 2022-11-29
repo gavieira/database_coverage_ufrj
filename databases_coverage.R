@@ -18,9 +18,9 @@ dimensions_files <- c(Sys.glob("data/dimensions/*csv"))
 lens_files <- dimensions_files <- c(Sys.glob("data/lens/*csv"))
 
 #Getting dataframes (bibliometrix)
-wos <- convert2df(wos_files, dbsource = "wos", format='bibtex')
-scopus <- convert2df(scopus_files, dbsource = "scopus", format = 'bibtex')
-dimensions <- convert2df(dimensions_files, dbsource = "dimensions", format = 'csv')
+#wos <- convert2df(wos_files, dbsource = "wos", format='bibtex')
+#scopus <- convert2df(scopus_files, dbsource = "scopus", format = 'bibtex')
+#dimensions <- convert2df(dimensions_files, dbsource = "dimensions", format = 'csv')
 
 
 ##### Reading only doi column for each dataset (way faster and less RAM usage)
@@ -59,28 +59,20 @@ dimensions <- read_delim("data/dimensions/Dimensions-Publication-2022-06-17_18-1
                      skip = 1)
 
 
-#Próximo passo: fazer uma função que:
-#Receba um vetor com todos os nomes dos arquivos de uma database (feito usando Sys.glob())
-# Crie uma df final, que vai ser retornada
-#Itere através de cada arquivo, pegando os dados em uma df temporaria, cujos resultados irão ser incorporados à df_final
-#Remova colunas duplicadas
+#### Lens
 
+View(read_delim("data/lens/ufrj_2017-2021.csv", delim = ',', n_max=5)) #Skip is necessary since first line is not tabular data
 
-files <- list.files('data/scopus',
-                    pattern = "[0-9]+.csv",
-                    full.names = TRUE)
-
-tables <- lapply(X = files, FUN = read_delim, delim=',', col_select = c("Document Type", "DOI"))
-merged_df <- do.call(rbind, tables) #Could also use the 'bind_rows()' function from dplyr
-merged_df <- bind_rows(tables)
-rm(tables)
-merged_df$DB <- "scopus"
+#we'll need the "Publication Type" and "DOI" columns
 
 
 
-
-
-### Trying to write function that gets all files (matching a given pattern), reads them into temporary dataframes and joins them into a single, final dataframe. Also, adds a column ("DB") to identify from which database is the specified data.
+### concat_df():
+#Gets all files (matching a given pattern)
+#Reads specified columns into temporary dataframes 
+#Joins them into a single, final dataframe
+#Also, adds a column ("DB") to identify from which database is the data
+#Has option to skip lines
 
 concat_df <- function(directory, pattern, delimiter,
                       columns, database, skip=0) {
@@ -105,7 +97,7 @@ scopus <- concat_df('data/scopus',
           database = 'scopus')
 
 wos <- concat_df('data/wos',
-                 pattern = '[0-9].*tsv',
+                 pattern = '[0-9].*txt',
                  delimiter = '\t',
                  columns = c("DT", "DI"),
                  database = 'wos')
@@ -118,12 +110,19 @@ dimensions <- concat_df('data/dimensions',
                         skip=1)
 
 
+lens <- concat_df('data/lens',
+                        pattern = '*csv',
+                        delimiter = ',',
+                        columns =c("Publication Type", "DOI"),
+                        database = 'lens')
+
 #Getting sets of DOIs (as vectors)
 #These sets are the unique values from the "DOI" vectors of the original dataframes. NA values where also removed
 
 set_wos <- unique(na.omit(wos$DI))
 set_scopus <- unique(na.omit(scopus$DOI))
 set_dimensions <- unique(na.omit(dimensions$DOI))
+set_lens <- unique(na.omit(dimensions$DOI))
 
 x <- list(WoS = set_wos, Scopus = set_scopus, Dimensions = set_dimensions)
 

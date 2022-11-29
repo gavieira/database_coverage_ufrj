@@ -4,3 +4,4 @@ api_keys
 .Rproj.user
 .Rhistory
 *.~lock*
+data_retrieval/*csv
