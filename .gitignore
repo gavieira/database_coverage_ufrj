@@ -4,4 +4,7 @@ api_keys
 .Rproj.user
 .Rhistory
 *.~lock*
+*__pycache__*
 data_retrieval/*csv
+output
+projeto
