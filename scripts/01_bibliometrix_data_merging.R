@@ -62,3 +62,8 @@ wos_df <- convert2df(filelist,
                         format = 'bibtex')
 
 write_df(wos_df, outdir, 'wos.csv')
+
+
+##We'll also be saving these dataframe objects into a .Rdata file 
+
+save()
