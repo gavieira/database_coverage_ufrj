@@ -3,6 +3,9 @@
 library('bibliometrix')
 library('tidyverse')
 
+#sourcing functions script
+source('scripts/00_functions.R')
+
 ## Using bibliometrix to merge files (needs a lot of RAM and takes a while to run...)
 
 #Writing function to write merged dfs in a custom output directory
@@ -11,7 +14,7 @@ write_df <- function(df, outdir, filename) {
   write_csv(df, sprintf("%s/%s", outdir, filename))
 }
 
-data_dir <- 'data' #Setting base data directory
+data_dir <- '/home/gabriel/ufrj_data_backup/data/' #Setting base data directory
 outdir <- paste0(data_dir,'/merged_data') #Setting output directory of merged data
 
 ## Merging Dimensions data
@@ -66,4 +69,6 @@ write_df(wos_df, outdir, 'wos.csv')
 
 ##We'll also be saving these dataframe objects into a .Rdata file 
 
-save()
+dfs <- list(dimensions = dimensions_df, lens = lens_df, scopus = scopus_df, wos = wos_df)
+
+save(dfs, file = 'output/data/dfs.Rdata')
