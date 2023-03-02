@@ -42,16 +42,6 @@ get_db_names <- function(dblist){
 }
 
 
-# Getting annual production by database (summaries list)
-get_annual_production <- function(data, database_name) {
-  year_df <- data$AnnualProduction %>% 
-  rename('year' = 1,'count' = 2) %>% #Changing column names
-  mutate(db = database_name) #Creating database column
-  return(year_df)
-}
-
-
-
 #General function to extract dataframe attributes in the 'summaries' list while adding an extra column (database name)
 get_info_from_summaries <- function(list, database, attribute_name) {
   attribute_index <- match(attribute_name, names(list)) #Getting index of desired information (attribute has to be a dataframe object)
