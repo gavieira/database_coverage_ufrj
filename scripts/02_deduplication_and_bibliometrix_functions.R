@@ -9,38 +9,6 @@ load('output/data/dfs.Rdata')
 
 ###Step 1 - Getting duplicates dataframe
 
-#Function to extract duplicates based on fields
-get_duplicates <- function(df, db, fields = everything()) {
- dups <- df %>%
- arrange(across({{ fields }})) %>%
- group_by(across({{ fields }})) %>%
- filter(n()>1)
- return(dups)
-}
-
-#Function to read_in data and:
-#1- add a new column to identify the source database
-#2- remove duplicates (default: use all columns)
-get_cleaned_df <- function(df, db, fields = everything()) {
-  df <- as.data.frame(df)%>%
-  distinct(across({{ fields }}), .keep_all = T) %>%
-  mutate(database = db) %>%
-  select(-starts_with('X.')) #Additional step to get rid of noninformative columns from WoS datasets
-  return(df)
-}
-
-
-#Getting name of databases from list objects
-get_db_names <- function(dblist){
-  dbs <- str_to_title(names(dblist)) #Getting db names from list attributes
-  for (i in 1:length(dbs)){ 
-    if (dbs[i] == 'Wos'){
-      dbs[i] <- 'WoS' #Changing 'Wos' to 'WoS'
-    }
-  }
-  return(dbs)
-}
-
 dbs <- get_db_names(dfs)
 
 duplicates_df <- map2(dfs, dbs, get_cleaned_df, fields = everything()) %>%
@@ -54,7 +22,7 @@ save(duplicates_df, file = 'output/data/duplicates.Rdata')
 #After manual inspection of the duplicates, we chose to use the fields X and Y to remove duplicates from our dataset
 
 
-##Step 2: data deduplication
+##Step 2: data deduplication/cleaning
 
 
 #Getting data into a single deduplicated dataframe
@@ -65,14 +33,23 @@ save(duplicates_df, file = 'output/data/duplicates.Rdata')
 
 
 #Getting individual deduplicated dataframes
-scopus_df <- get_cleaned_df(scopus_df, 'scopus')
-dimensions_df <- get_cleaned_df(dimensions_df, 'dimensions')
-lens_df <- get_cleaned_df(lens_df, 'lens')
-wos_df <- get_cleaned_df(wos_df, 'wos')
+scopus_df <- get_cleaned_df(dfs$scopus, 'scopus')
+dimensions_df <- get_cleaned_df(dfs$dimensions, 'dimensions')
+lens_df <- get_cleaned_df(dfs$lens, 'lens')
+wos_df <- get_cleaned_df(dfs$wos, 'wos')
+
+
+#Updating the 'dfs' list and .Rdata file with the cleaned versions of the dataframes
+dfs <- list(dimensions = dimensions_df, 
+            lens = lens_df, 
+            scopus = scopus_df, 
+            wos = wos_df)
+
+save(dfs, file = 'output/data/dfs.Rdata')
 
 ##Step 3: Bibliometrix's biblioAnalysis function
 
-#Running biblioAnalysis function for all each dataset (takes a while...)
+#Running biblioAnalysis function for each dataset (takes a while...)
 dimensions_biblio <- biblioAnalysis(dfs$dimensions)
 scopus_biblio <- biblioAnalysis(dfs$scopus)
 wos_biblio <- biblioAnalysis(dfs$wos)
