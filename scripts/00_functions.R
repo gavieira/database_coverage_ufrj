@@ -1,5 +1,6 @@
 library(tidyverse)
 library(bibliometrix)
+library(uuid)
 
 #Function to write merged dfs in a custom output directory
 write_df <- function(df, outdir, filename) {
@@ -119,4 +120,29 @@ get_duplicate_rows_at_column <- function(df, column_name) {
     filter(n() > 1) %>%     # Keep only groups with more than one occurrence
     arrange(!!column_name)     # Arrange the data by the specified column
   return(duplicates)   # Return the resulting dataframe with duplicate values
+}
+
+
+#Function to generate universally unique identifiers (UUIDs) for rows of a dataframe
+generate_uuid <- function(df, new_column = 'UUID') {
+  new_column <- sym(new_column)
+  df %>%
+  mutate(!!new_column := sapply(1:nrow(df), UUIDgenerate)) %>%
+  relocate(!!new_column, .before = 1)
+}
+
+
+#Function to check if a single column has only unique values
+col_all_unique <- function(df, column) {
+  df %>%
+    bind_rows() %>%
+    summarise(all_unique = n_distinct( !!sym(column) ) == n() )
+}
+
+
+#Function to test the penalty on the levenshtein distance for a given multiplier
+test_lev_penalty <- function(multiplier) {
+  vector <- (1:10)**2 * multiplier
+  names(vector) <- 1:10
+  return(vector)
 }
