@@ -120,10 +120,10 @@ View( dbs_coverage %>%
 ##Source = 0.3 - Levenshtein * 0.1
 ##Author = 0.3 Levenshtein * 0.1
 #Fazer comparações par a par:
-##Gerar ids unicos para cada documento da base 1
-##Comparar cada documento da base 1 com os documentos das outras bases - atribuir o mesmo ID para eles
-##Gerar ids unicos para documentos da base 2 não presentes na base 1
-##Comparar cada documento da base 2 com os documentos das bases 3 e 4 - atribuir o mesmo ID para eles
+##Gerar ids unicos para cada documento de todas as bases
+##Comparar cada documento da base 1 com os documentos das outras bases - atribuir o mesmo ID para eles se o maior  score for maior que 1 - score ficará registrado na segunda base em todas as comparações
+##Para diminuir o poder computacional necessário pra essa análise, quando um documento base 1 der match com um documento de outra base, o documento da outra base será removido das próximas rodadas de comparação (documentos com score serão removidos) - Isso faz com que a ordem dos argumentos na comparação seja extremamente importante
+##Comparar cada documento da base 2 (sem o valor do score) com os documentos das bases 3 e 4 - atribuir o mesmo ID para eles
 ##Mesma coisa para o ultimo par (bases 3 e 4)
 
 #####################################
@@ -137,17 +137,17 @@ dbs_coverage <- lapply(dfs, function(df) {
     df <- mutate(df, TC = as.numeric(Citing.Works.Count))
   }
   df %>%
-    select(DI, TI, PY, AU, J9, TC) %>%
+    select(DI, TI, PY, AU, J9, DT, TC) %>%
     mutate(AU = str_extract(AU, "^[^;]+") ) %>% #Getting only the first author from the 'AU' column; regex extracts the substring up to the first ";"
     mutate(across(where(is.character), toupper)) %>% #Converting all character fields to uppercase
     mutate(across(where(is.character), ~ iconv(., from = "UTF-8", to = "ASCII//TRANSLIT"))) %>% #Converting all character fields to US-ASCII (removing accentuation)
     mutate_all(trimws) %>% #Removing whitespace from all values
     mutate_all(~ifelse(. == "" | is.null(.), NA, .) ) %>% #Converting empty/null values to NA 
-    mutate(J9 = ifelse(J9 == "CHARACTER(0)", NA, J9)) #Adding NA to fields without journal abbreviation (which contains the "CHARACTER(0)" string)
+    mutate(J9 = ifelse(J9 == "CHARACTER(0)", NA, J9)) %>% #Adding NA to fields without journal abbreviation (which contains the "CHARACTER(0)" string)
+    mutate(score = NA) #This column will be used to exclude documents that have already been matched to another database from subsequent comparisons, reducing execution time
 } )
 
 View(dbs_coverage)
-
 
 
 #Adding a new column containing the database name as first field
@@ -201,9 +201,9 @@ list2env(
 #With the data properly formated, we need to:
 #1- Create a function that implements our scoring system
 #1.5- Create a function that returns all possible combination pairs from the 4 databases
-#2- Apply such function from each record on db1 to each record on db2
+#2- Apply such function from each record on db1 to each record on db2 
 #3- Select the pair that has the highest value
-#4- Use the same id for both
+#4- The id of db1 gets copied to db2, and the score value is added to the db2 record
 
 #Checking column names
 colnames(dbs_coverage$dimensions)
@@ -218,11 +218,14 @@ test_na <- function(vector) {
   }
 }
   
+#Compares two rows and calculates score based on similarity between fields
+#Depends on the 'test_na' function to determine if there are NAs in at least one of the records in each field assessed
+#When there is at least one NA, the score for the field will be zero
 calc_score <- function (row1, row2) {
-  doi <- ifelse( test_na(c(row1['DI'], row2['DI'])) || row1['DI'] != row2['DI'], 0, 1 ) #Score for publication DOI
+  doi <- ifelse( test_na(c(row1['DI'], row2['DI'])) || row1['DI'] != row2['DI'], 0, 1 ) #Score for publication DOI 
   title <- ifelse( test_na(c(row1['TI'], row2['TI'])), 0, 
                    pmax(0.6 - adist(row1['TI'], row2['TI'])[1] **2 * 0.01, 0) ) #Score for publication title - adist() calculates levenshtein distance, while pmax replaces negative values with 0
-  if (doi + title < 0.1) { #if doi+title is <0.1, there's no way to reach the threshold (1), thus we will just go to the next document
+  if (doi + title < 0.1) { #if doi+title is <0.1, there's no way to reach the threshold (1), so we'll save some processing power and just go to the next document
    return(NA) 
   }
   year <-ifelse( test_na(c(row1['PY'], row2['PY'])) || row1['PY'] != row2['PY'], 0, 0.3 ) #Score for publication year
@@ -235,15 +238,92 @@ calc_score <- function (row1, row2) {
 }
 
 
-calc_score(db1[1,], db2[1,])
-
-
-scores <- apply(db2, 1, function(row2) {
-  calc_score(db1[2, ], row2)
+result <- lapply(db1, function(row1) {
+  lapply(db2, function(row2) {
+    score <- calc_score(row1,row2)
+    return(score)
+  })
 })
-scores
+
+result
+
+#Preciso de condição para só comparar com a db2 se o registro ainda não tiver par
+#Function to apply the calc_score for a single row in db1 to all db2 rows and get the max value and index
+#get_max_score <- function(row1, db2) {
+#                          scores <- unname( apply(db2, MARGIN = 1, calc_score, row1 = row1) ) #Applying the calc_score function to a single row of db1 to all rows of db2 and removing names from the resulting vector
+#                          return( c("max_score" = max(scores, na.rm = TRUE), 
+#                                    "index" =  which.max(scores)) ) #Returning a named vector with both max_score and the index of the (first) occurrence of the max_score
+#}
+
+
+get_max_score <- function(row1, db2, score_cutoff = 1) {
+                          scores <- apply(db2, MARGIN = 1, function(row2) { #generating a vector containing the results of the 'calc_score' function
+                            if ( is.na(row2['score']) ) { calc_score(row1, row2) } #Caculates the score only for records in db2 that haven't been paired to another record (in other words, records without a score attached)
+                            else { NA } #Else, returns NA to make the resulting vector present the same indices
+                          }) 
+                          scores <- unname(scores) #Removing names from the resulting vector
+                          max_score <- max(scores, na.rm = TRUE) #Getting value of (first) maximum obtained score. Will return warning if no match is found (scores vector will have only NAs)
+                          max_index <- which.max(scores) #Getting the index of the row with the highest score
+                          if (max_score >= score_cutoff) { #If max_score is higher than cutoff (default = 1)
+                            db2[max_index, 'score'] <- max_score #Adding the value of score to matched record in db2
+                            db2[max_index, 'UUID'] <- row1['UUID'] #Copying db1 record (query) uuid to db2 matched record (subject)
+                          }
+                          #return (list(scores = scores, max_score = max_score, index = max_index, rows =  bind_rows(row1, db2[max_index,])))
+                          return (db2)
+}
+
+
+compare_dbs <- function(db1, db2) {
+  apply(db1, MARGIN = 1, function(row1) {
+    max_index <- get_max_score(row1, db2)
+    
+  })
+}
+
+
+db2
+db_teste <- get_max_score(db1[2,], db2)
+
+db_teste[31,]
+
+
+apply(db2, MARGIN = 1, calc_score, row1 = db1[2,])
+
+scores <- get_max_score(db1[2,], db2)
+
+View(scores)
+
+test <- which.max(scores)
 
 print(unique(scores))
+
+scores['index']
+
+
+View(rbind(db1[2,], db2[scores['index'],]))
+
+my_function <- function(df) {
+  # Perform operations to modify the dataframe
+  df$column <- df$column + 1
+  df$new_column <- "new value"
+  
+  # No need to return the dataframe since modifications are made in-place
+}
+
+# Create a dataframe
+my_dataframe <- data.frame(column = 1:5)
+
+# Call the function to modify the dataframe
+my_function(my_dataframe)
+
+# The changes made in the function persist in the original dataframe
+print(my_dataframe)
+
+
+
+
+
+
 
 # Initialize an empty list to store the scores
 score_list <- list()
@@ -312,7 +392,7 @@ match_index
 ##Title = 0.6 - Levenshtein * 0.1 (ou 0.05)
 ##Year = 0.3
 ##Source = 0.3 - Levenshtein * 0.1
-##Author = 0.3 Levenshtein * 0.1
+##Author = 0.3 - Levenshtein * 0.1
 
 #Creating dataframe objects for testing
 
