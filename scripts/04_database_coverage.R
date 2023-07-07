@@ -4,6 +4,7 @@ library(bibliometrix)
 library(treemapify)
 library(patchwork)
 library(uuid)
+library(parallel)
 
 #sourcing functions script
 source('scripts/00_functions.R')
@@ -125,6 +126,9 @@ View( dbs_coverage %>%
 ##Para diminuir o poder computacional necessário pra essa análise, quando um documento base 1 der match com um documento de outra base, o documento da outra base será removido das próximas rodadas de comparação (documentos com score serão removidos) - Isso faz com que a ordem dos argumentos na comparação seja extremamente importante
 ##Comparar cada documento da base 2 (sem o valor do score) com os documentos das bases 3 e 4 - atribuir o mesmo ID para eles
 ##Mesma coisa para o ultimo par (bases 3 e 4)
+##Não vou paralelizar nada (a princípio), pois tentei aplicar paralelismo na função de cálculo de scores e não fez muita diferença (talvez por serem operações leves, o custo computacional da quebra do problema em partes menores faça não valer tanto a pena - Parallel Execution Overhead). Por último, não dá para colocar todas as comparações numa fila, já que a ordem das comparações importa. O único outro lugar em que daria para paralelizar seria nas comparações de uma db1 com as db2, mas não parece fazer muito sentido pois, à medida que 'pulamos' para a próxima db1, teremos menos comparações para serem feitas. 
+##Excelente material sobre paralelismo em R (pacote 'parallel'): https://dept.stat.lsa.umich.edu/~jerrick/courses/stat701/notes/parallel.html
+##Excelente material sobre paralelismo em R (pacote 'foreach'): https://colab.research.google.com/github/ycrc/ParallelR/blob/master/ParallelR.ipynb#scrollTo=oC60c1IaFYYz
 
 #####################################
 
@@ -144,7 +148,7 @@ dbs_coverage <- lapply(dfs, function(df) {
     mutate_all(trimws) %>% #Removing whitespace from all values
     mutate_all(~ifelse(. == "" | is.null(.), NA, .) ) %>% #Converting empty/null values to NA 
     mutate(J9 = ifelse(J9 == "CHARACTER(0)", NA, J9)) %>% #Adding NA to fields without journal abbreviation (which contains the "CHARACTER(0)" string)
-    mutate(score = NA) #This column will be used to exclude documents that have already been matched to another database from subsequent comparisons, reducing execution time
+    mutate(score = 0) #This column will be used to exclude documents that have already been matched to another database from subsequent comparisons, reducing execution time
 } )
 
 View(dbs_coverage)
@@ -191,7 +195,7 @@ list2env(
   subset_df_list(
   lapply( dbs_coverage, function(df)  arrange(df, desc(TC)) ), 
   prefix = 'db',
-  n_recs = 1000
+  n_recs = 100
 ), envir = .GlobalEnv)
 
 
@@ -221,75 +225,209 @@ test_na <- function(vector) {
 #Compares two rows and calculates score based on similarity between fields
 #Depends on the 'test_na' function to determine if there are NAs in at least one of the records in each field assessed
 #When there is at least one NA, the score for the field will be zero
+#Skips rows with a match
 calc_score <- function (row1, row2) {
-  doi <- ifelse( test_na(c(row1['DI'], row2['DI'])) || row1['DI'] != row2['DI'], 0, 1 ) #Score for publication DOI 
-  title <- ifelse( test_na(c(row1['TI'], row2['TI'])), 0, 
-                   pmax(0.6 - adist(row1['TI'], row2['TI'])[1] **2 * 0.01, 0) ) #Score for publication title - adist() calculates levenshtein distance, while pmax replaces negative values with 0
-  if (doi + title < 0.1) { #if doi+title is <0.1, there's no way to reach the threshold (1), so we'll save some processing power and just go to the next document
-   return(NA) 
-  }
-  year <-ifelse( test_na(c(row1['PY'], row2['PY'])) || row1['PY'] != row2['PY'], 0, 0.3 ) #Score for publication year
-  source <- ifelse( test_na(c(row1['J9'], row2['J9'])), 0, 
-                    pmax(0.3 - adist(row1['J9'], row2['J9'])[1]*0.1, 0) ) #Score for publication source
-  author <- ifelse( test_na(c(row1['AU'], row2['AU'])), 0, 
-                    pmax(0.3 - adist(row1['AU'], row2['AU'])[1]*0.1, 0)  )#Score for publication author
-  final_score <- doi + title + year + source + author
-  return(final_score)
+  if ( row1['score'] < 1 & row2['score'] < 1 ) { #Only calculate score if rows analyzed did not find a match before
+    doi <- ifelse( test_na(c(row1['DI'], row2['DI'])) || row1['DI'] != row2['DI'], 0, 1 ) #Score for publication DOI 
+    title <- ifelse( test_na(c(row1['TI'], row2['TI'])), 0, 
+                     pmax(0.6 - adist(row1['TI'], row2['TI'])[1] **2 * 0.01, 0) ) #Score for publication title - adist() calculates levenshtein distance, while pmax replaces negative values with 0
+    if (doi + title < 0.1) { #if doi+title is <0.1, there's no way to reach the threshold (1), so we'll save some processing power and just go to the next document
+     return( 0 ) 
+    }
+    year <-ifelse( test_na(c(row1['PY'], row2['PY'])) || row1['PY'] != row2['PY'], 0, 0.3 ) #Score for publication year
+    source <- ifelse( test_na(c(row1['J9'], row2['J9'])), 0, 
+                      pmax(0.3 - adist(row1['J9'], row2['J9'])[1]*0.1, 0) ) #Score for publication source
+    author <- ifelse( test_na(c(row1['AU'], row2['AU'])), 0, 
+                      pmax(0.3 - adist(row1['AU'], row2['AU'])[1]*0.1, 0)  )#Score for publication author
+    final_score <- doi + title + year + source + author
+    return(final_score)
+  } else { 0 }
 }
 
 
-result <- lapply(db1, function(row1) {
-  lapply(db2, function(row2) {
-    score <- calc_score(row1,row2)
-    return(score)
-  })
-})
+#Function that calculates a score matrix based on the 'calc_score' function for each combination of rows between db1 and db2
+get_score_matrix <- function(db1,db2) {
+  scores <- lapply(1:nrow(db1), function(i) { #First laplly that goes over each row of db1
+    print(paste("Starting comparison for row", i))
+    lapply(1:nrow(db2), function(j) { #Second lapply that goes over each row of db2 
+      calc_score(db1[i,], db2[j,]) #Calculates score for current rows
+      })
+  }) 
+  score_matrix <- do.call(rbind, scores) #Since lapply returns a list of lists, we need to unpack it with do.call, which will in turn pass it to the rbind function. In this case, rows refer to db1 records, while columns refer to db2's.
+  
+  #Setting row and col prefixes for score_matrix
+  row_prefix <- unique(db1$DB)
+  col_prefix <- unique(db2$DB)
+  
+  #Creating vectors with prefix+index
+  row_names <- paste(row_prefix, 1:nrow(score_matrix), sep = '.' )
+  col_names <- paste(col_prefix, 1:ncol(score_matrix), sep = '.')
+  
+  #Finally, changing matrix row and column names
+  dimnames(score_matrix) <- list(row_names, col_names)
+  
+  return ( score_matrix)
+}
 
-result
-
-#Preciso de condição para só comparar com a db2 se o registro ainda não tiver par
-#Function to apply the calc_score for a single row in db1 to all db2 rows and get the max value and index
-#get_max_score <- function(row1, db2) {
-#                          scores <- unname( apply(db2, MARGIN = 1, calc_score, row1 = row1) ) #Applying the calc_score function to a single row of db1 to all rows of db2 and removing names from the resulting vector
-#                          return( c("max_score" = max(scores, na.rm = TRUE), 
-#                                    "index" =  which.max(scores)) ) #Returning a named vector with both max_score and the index of the (first) occurrence of the max_score
-#}
 
 
-get_max_score <- function(row1, db2, score_cutoff = 1) {
-                          scores <- apply(db2, MARGIN = 1, function(row2) { #generating a vector containing the results of the 'calc_score' function
-                            if ( is.na(row2['score']) ) { calc_score(row1, row2) } #Caculates the score only for records in db2 that haven't been paired to another record (in other words, records without a score attached)
-                            else { NA } #Else, returns NA to make the resulting vector present the same indices
-                          }) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Function to apply the calc_score for a single row in db1 to all db2 rows,
+#get the max value and (if > 1) index
+#and update the max_value_record (match), 
+#returning the dataframe with this
+get_document_match <- function(row1, db2, score_cutoff = 1) {
+                          scores <- apply(db2, MARGIN = 1, function(row2) { calc_score(row1, row2) }) #Caculates the score 
                           scores <- unname(scores) #Removing names from the resulting vector
                           max_score <- max(scores, na.rm = TRUE) #Getting value of (first) maximum obtained score. Will return warning if no match is found (scores vector will have only NAs)
-                          max_index <- which.max(scores) #Getting the index of the row with the highest score
                           if (max_score >= score_cutoff) { #If max_score is higher than cutoff (default = 1)
-                            db2[max_index, 'score'] <- max_score #Adding the value of score to matched record in db2
-                            db2[max_index, 'UUID'] <- row1['UUID'] #Copying db1 record (query) uuid to db2 matched record (subject)
+                            max_index <- which.max(scores) #Getting the index of the row with the highest score
+                            db2[max_index, 'score'] <- max_score
+                            db2[max_index, 'UUID'] <- row1['UUID']
                           }
-                          #return (list(scores = scores, max_score = max_score, index = max_index, rows =  bind_rows(row1, db2[max_index,])))
-                          return (db2)
+                          return( db2 )
 }
 
 
 compare_dbs <- function(db1, db2) {
-  apply(db1, MARGIN = 1, function(row1) {
-    max_index <- get_max_score(row1, db2)
-    
-  })
+  for (i in 1:nrow(db1)) {
+    row1 <- db1[i, ]
+    db2 <- get_document_match(row1, db2) 
+    }
+  return (db2)
+}
+
+parallel_compare_dbs <- function(db1, db2) {
+  for (i in 1:nrow(db1)) {
+    row1 <- db1[i, ]
+    db2 <- parallel_get_document_match(row1, db2) 
+    }
+  return (db2)
 }
 
 
-db2
-db_teste <- get_max_score(db1[2,], db2)
-
-db_teste[31,]
 
 
-apply(db2, MARGIN = 1, calc_score, row1 = db1[2,])
+parallel_compare_dbs <- function(db1, db2) {
+  cl <- makeCluster(detectCores()) # Create a cluster using all available cores
+  registerDoParallel(cl) # Register the cluster for use with foreach
+  
+  clusterExport(cl, c("get_document_match", "calc_score", "test_na"))
+  
+  result <- foreach (i = 1:nrow(db1), .packages = "foreach", .combine = "c") %dopar% {
+    row1 <- db1[i, ]
+    get_document_match(row1, db2)
+  }
+  
+  # Stop the cluster
+  stopCluster(cl)
+  
+  return(result)
+}
 
-scores <- get_max_score(db1[2,], db2)
+test1 <- parallel_compare_dbs(db1, db2)
+test2 <- compare_dbs(db1, db2)
+  
+View(test1)
+
+get_document_match <- function(row1, db2, score_cutoff = 1) {
+                          scores <- apply(db2, MARGIN = 1, function(row2) { calc_score(row1, row2) }) #Caculates the score 
+                          scores <- unname(scores) #Removing names from the resulting vector
+                          max_score <- max(scores, na.rm = TRUE) #Getting value of (first) maximum obtained score. Will return warning if no match is found (scores vector will have only NAs)
+                          print(max_score)
+                          if (max_score >= score_cutoff) { #If max_score is higher than cutoff (default = 1)
+                            max_index <- which.max(scores) #Getting the index of the row with the highest score
+                            db2[max_index, 'score'] <- max_score
+                            db2[max_index, 'UUID'] <- row1['UUID']
+                          }
+                          return( db2 )
+}
+
+
+library(doParallel)
+library(foreach)
+
+parallel_get_document_match <- function(row1, db2, score_cutoff = 1) {
+  # Paralelização
+  cl <- makeCluster(6) # Cria um cluster usando todos os núcleos disponíveis
+  registerDoParallel(cl) # Registra o cluster para uso com foreach
+  
+  # Export functions to the worker processes
+  clusterExport(cl, c("calc_score", "test_na" ))
+  
+  # Loop paralelo usando foreach e %dopar%
+  scores <- foreach(i = seq_len(nrow(db2)), .combine = "c") %dopar% {
+    row2 <- db2[i, ]
+    score <- calc_score(row1, row2)
+    score
+  }
+  
+  # Encerra o cluster
+  stopCluster(cl)
+  
+  scores <- unlist(scores)
+  max_score <- max(scores, na.rm = TRUE) #Getting value of (first) maximum obtained score. Will return warning if no match is found (scores vector will have only NAs)
+  print(max_score)
+  if (max_score >= score_cutoff) { #If max_score is higher than cutoff (default = 1)
+    max_index <- which.max(scores) #Getting the index of the row with the highest score
+    db2[max_index, 'score'] <- max_score
+    db2[max_index, 'UUID'] <- row1['UUID']
+  }
+  return( db2 )
+}
+
+# Exemplo de chamada da função
+result <- get_document_match(db1[2, ], db2, score_cutoff = 1)
+result <- parallel_get_document_match(db1[2, ], db2, score_cutoff = 1)
+View(result)
+
+system.time(  get_document_match(db1[2,], db2)  ) #Caculates the score 
+system.time(  parallel_get_document_match(db1[2,], db2)  ) #Caculates the score 
+
+
+print(get_document_match(db1[2, ], db2, score_cutoff = 1))
+
+
+
+get_max_score_record(db1[2,], db2)
+any(is.na(db_teste))
+View(db2)
+
+
+
+lapply(db2, MARGIN = 1, calc_score, row1 = db1[2,])
+
+scores <- get_max_score_record(db1[2,], db2)
+scores
 
 View(scores)
 
