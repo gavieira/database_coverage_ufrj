@@ -23,6 +23,9 @@ get_duplicates <- function(df, db, fields = everything()) {
 #1- add a new column to identify the source database
 #2- remove duplicates (default: use all columns)
 get_cleaned_df <- function(df, db, fields = everything()) {
+  if ('Citing.Works.Count' %in% names(df) ) { #Dealing with lens, which has citations in the 'Citing.Works.Count' field
+    df <- mutate(df, TC = as.numeric(Citing.Works.Count))
+  }
   df <- as.data.frame(df)%>%
   distinct(across({{ fields }}), .keep_all = T) %>%
   mutate(database = db) %>%

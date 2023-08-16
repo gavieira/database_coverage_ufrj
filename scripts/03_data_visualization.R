@@ -42,10 +42,12 @@ plots$total_docs <- data.frame( lapply( analyses, function(x) x[['Articles']] ) 
   mutate(perc = round(docs/max(docs) * 100, 1)) %>%
   ggplot(aes(x = fct_reorder(db, -docs), y = docs, fill = db)) +
   geom_bar(stat = 'identity', show.legend = FALSE) +
+  #geom_point(alpha = 0.3, show.legend = FALSE) +
+  #geom_line(group = 1, position = "identity", alpha = 0.3, show.legend = FALSE) +
   geom_text(aes(label = paste(docs," (",perc,"%)", sep = '')), vjust = -0.5) +
   labs(x = "Database", y = "Documents")
 
-
+#plots$total_docs
 #### Annual production plot
 
 aux_vars$annual_prod <- map2(summaries, aux_vars$db_names, get_info_from_summaries, attribute_name = 'AnnualProduction') %>%
@@ -169,16 +171,17 @@ plots$doctypes_bar <- aux_vars$doctypes %>%
 ggplot( aes(x = id, y = result, color = db) ) +
   facet_wrap(vars(db), scales='free_x') + #Freeing x axis allows to only plot bars for doctypes that actually occur in the database
   geom_bar(stat='identity') + 
-  geom_text(aes(label = result), size = 2.5, color = 'black', vjust= -0.5) + #Adding number of documents to each bar stack
+  geom_text(aes(label = result), size = 3.5, color = 'black', vjust= -.5) + #Adding number of documents to each bar stack
   geom_text(x = Inf, y = 75000, size = 5,  color = 'black', aes(label = label), data = aux_vars$doctypes_labels, hjust=1.2) + #Annotating each facet with 'doctypes_labels'
   xlab('doctypes') +
   ylab('doc_count') +
   scale_x_discrete(breaks = aux_vars$doctypes$id,
                    labels = aux_vars$doctypes$description) + #Changing x-axis label names
-  theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1), legend.position = "none")
+  scale_y_continuous(expand = expansion(mult = .1)) + #Expanding y scale to fit number of documents over each bar stack
+  theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1),  legend.position = "none")
+
 
 #plots$doctypes_bar
-
 
 ### Making a treemap plot
 
@@ -228,7 +231,9 @@ aux_vars$doctypes_normalized <- aux_vars$doctypes %>%
   spread(db, result) %>% #Spreading db field into several columns (long to wide)
   replace(is.na(.), 0) %>% #Filling NA observations with zeroes
   gather("db","result", c(Dimensions, Lens, Scopus, WoS)) #Returning df to long format
-  
+
+
+
 #listing all document types in the 'other' category
 cat(paste("'", unique(aux_vars$doctypes$description[!aux_vars$doctypes$description %in% c('article',
                   'journal article', 'review', 'article in press', 'article; early access', 'review; early access',
@@ -254,11 +259,13 @@ plots$doctypes_bar_normalized <- aux_vars$doctypes_normalized %>%
 ggplot( aes(x = description, y = result, color = db) ) +
   facet_grid(vars(db)) + #Freeing x axis allows to only plot bars for doctypes that actually occur in the database
   geom_bar(stat='identity') + 
-  geom_text(aes(label = paste(result, ' (', percentage, '%)', sep = '')), size = 3.5, color = 'black', vjust= -0.5) + #Adding number of documents to each bar stack
+  geom_text(aes(label = paste(result, ' (', percentage, '%)', sep = '')), size = 4, color = 'black', vjust= -0.5) + #Adding number of documents to each bar stack
   xlab('doctypes') +
   ylab('doc_count') +
   ylim(0,95000) +
-  theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1), legend.position = "none")
+  #scale_y_continuous(expand = expansion(mult = .2)) + #Expanding y scale to fit number of documents over each bar stack
+  theme(legend.position = "none")
+  #theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1), legend.position = "none")
 
 plots$doctypes_bar_normalized
 
@@ -380,7 +387,7 @@ plots$citation_histogram <- aux_vars$citation_data_articles %>%
   geom_histogram(aes(fill = decade), breaks = c(0, 1, seq(5,100, by=5)), color = 'black') +
   geom_text(aes(label = after_stat(count)), 
             stat = 'bin', breaks = c(0, 1, seq(5,100, by=5)), 
-            size = 2.5, 
+            size = 3.5, 
             nudge_y = 3000) + #Adding number of documents to each bar stack
   #geom_text(aes(label = after_stat(count)), stat = 'bin', breaks = c(0, 1, seq(5,100, by=5)), size = 1.5, position = position_stack(vjust = 1.1)) + #Adding number of documents to each bar stack
   #geom_bar(show.legend = F) +
