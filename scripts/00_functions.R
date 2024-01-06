@@ -1,6 +1,5 @@
 library(tidyverse)
 library(bibliometrix)
-library(uuid)
 
 #Function to write merged dfs in a custom output directory
 write_df <- function(df, outdir, filename) {
@@ -10,11 +9,12 @@ write_df <- function(df, outdir, filename) {
 
 
 #Function to extract duplicates based on fields
-get_duplicates <- function(df, db, fields = everything()) {
- dups <- df %>%
- arrange(across({{ fields }})) %>%
- group_by(across({{ fields }})) %>%
- filter(n()>1)
+get_duplicates <- function(df, fields = everything()) {
+ dups <- df %>%  
+   arrange(across({{ fields }})) %>% 
+   group_by(across({{ fields }})) %>% 
+   filter(n()>1) %>%
+   mutate_all(as.character) #Normalizing column types here to be able to use bind_rows on the duplicated data
  return(dups)
 }
 
@@ -22,15 +22,18 @@ get_duplicates <- function(df, db, fields = everything()) {
 #Function to read_in data and:
 #1- add a new column to identify the source database
 #2- remove duplicates (default: use all columns)
-get_cleaned_df <- function(df, db, fields = everything()) {
-  if ('Citing.Works.Count' %in% names(df) ) { #Dealing with lens, which has citations in the 'Citing.Works.Count' field
-    df <- mutate(df, TC = as.numeric(Citing.Works.Count))
+get_cleaned_df <- function(df, fields = everything()) {
+  if ('Citing.Works.Count' %in% names(df) ) { #Dealing with some particularities of lens, which is the only database with the 'Citing.Works.Count' field
+    df <- df %>% 
+      mutate(TC = as.numeric(Citing.Works.Count), #Creating a TC column (which is the field name for citations in other dbs) based on the Citing.Works.Count column
+             AU_CO = as.character(AU_CO)) #Converting the AU_CO field into character (it has only NAs, so R reads it automatically as a boolean col)
+      
   }
   df <- as.data.frame(df)%>%
-  distinct(across({{ fields }}), .keep_all = T) %>%
-  mutate(database = db) %>%
+    mutate(DT = ifelse(is.na(DT) | DT == '', 'Unidentified', DT)) %>% # Replace NA or '' in DT with 'Unidentified'
   select(-starts_with('X.')) %>% #Additional step to get rid of noninformative columns from WoS datasets
-  filter(PY <= 2022) #Keeping documents published up to 2022
+  filter(PY <= 2022) %>% #Keeping only documents published up to 2022
+  distinct(across({{ fields }}), .keep_all = T) 
   return(df)
 }
 
@@ -54,6 +57,54 @@ get_info_from_summaries <- function(list, database, attribute_name) {
   mutate(db = database) #Creating database column
   return(info)
 }
+
+#Function to check if total document number of docs in dfs and aux_vars$main_info match
+dfs_and_main_info_totals_match <- function(dfs, main_info, db_name) {
+    database_total <- nrow(dfs[[tolower(db_name)]])
+    main_info_total <- main_info %>%
+      filter(db == db_name,
+             description == 'Documents') %>%
+      select(result)
+    
+   return( setNames(database_total == main_info_total, db_name ) )
+}
+
+
+#Function to normalize fields and extract only relevant fields for downstream analyses 
+normalize_df <- function(df) { 
+  decades = c("Pre-1983", "1983-1992",  
+              "1993-2002", "2003-2012",  
+              "2013-2022", "Undefined") #Creating a vector that will be used to group our data by decade
+  normalized_df <- df %>% 
+    filter(!is.na(PY)) %>% #Removing any documents with unknown publication year
+    remove_rownames %>% # Removing rownames from the dataframe
+    select(DB, DI, TI, DT, PY, SO, J9, TC, AU) %>%
+    mutate(AU = sub(";.*$", "", AU), #Getting only the first author from the 'AU' column; patter removes text after the first ';' separator
+           decade = case_when( #Adding decade of document
+             PY < 1983 ~ decades[1],
+             between(PY, 1983,1992) ~ decades[2],
+             between(PY, 1993,2002) ~ decades[3],
+             between(PY, 2003,2012) ~ decades[4],
+             between(PY, 2013,2022) ~ decades[5],
+             .default = decades[6]),
+           decade = factor(decade, levels = decades),
+           DT = case_when( #Normalizing document type
+             DT %in% c('ARTICLE', 'JOURNAL ARTICLE', 'REVIEW', 'ARTICLE; EARLY ACCESS', 'REVIEW; EARLY ACCESS', 
+                       'ARTICLE; DATA PAPER', 'ARTICLE; RETRACTED PUBLICATION', 
+                       'ARTICLE; DATA PAPER; EARLY ACCESS', 'REPRINT') ~ 'Articles',
+             DT %in% c('PROCEEDING', 'CONFERENCE PROCEEDINGS ARTICLE', 'CONFERENCE PROCEEDINGS', 
+                       'CONFERENCE PAPER', 'CONFERENCE REVIEW', 'PROCEEDINGS PAPER', 'MEETING ABSTRACT',
+                       'ARTICLE; PROCEEDINGS PAPER') ~ 'Proceedings itens', 
+             DT %in% c('BOOK', 'BOOK CHAPTER', 'CHAPTER', 'ARTICLE; BOOK CHAPTER', 'REVIEW; BOOK CHAPTER') ~ 'Books and book chapters', #Does not include book reviews
+             DT %in%  c('Unidentified') ~ 'Unidentified', 
+             DT %in%  c('PREPRINT') ~ 'Preprint',
+             .default = 'Other')) #Adding a last value to aggregate all other DTs
+  
+  return(normalized_df)
+}
+
+
+
 
 
 #Function to calculate the h-index
@@ -114,6 +165,40 @@ hcindex <- function(citations, pubyear,
 }
 
 
+
+#Function to save a list of plots to a specified path (png)
+save_plot_list <- function(plot_list, filenames = names(plot_list),
+                           plot_outpath = 'output/plots/',
+                           width = 20, height = 9, unit = 'in', 
+                           dpi = 300) {
+  sapply(1:length(plot_list), function(index){
+    ggsave(paste0(plot_outpath,filenames[[index]],".png"), plot = plots[[index]], width = width, height = height, dpi = dpi)
+  })
+}
+
+
+custom_venn <- function(uuid_list, title) {
+  return(ggVennDiagram(uuid_list) + 
+           scale_fill_gradient(low = "#A7C7E7", high = "#08306B") +
+           scale_x_continuous(expand = expansion(mult = .2)) + 
+           guides(fill='none') +
+           labs(title = title) +
+           theme(plot.title = element_text(size = 20, hjust = 0.5))) #Returning ggplot venn diagram
+}
+
+
+venn_by_doctype <- function(doctype = "All", db_list_matched) {
+  if (doctype != 'All') {
+    db_list_matched <- lapply(db_list_matched, function(db)  db %>% filter(DT == doctype) )
+  } #Filtering records for a given doctype (if necessary)
+  uuid_list <- lapply(db_list_matched, function(db) db$UUID) #Extracting UUID list for each base
+  if (length(uuid_list) < 2) {
+    stop("At least 2 non-empty lists are required to create a Venn diagram.")
+  }
+  return(custom_venn(uuid_list, title = doctype))
+}
+
+
 # Define a function to retrieve duplicate values in a specified column of a dataframe
 get_duplicate_rows_at_column <- function(df, column_name) {
   column_name <- sym(column_name) #Converting column_name variable to symbol
@@ -125,27 +210,9 @@ get_duplicate_rows_at_column <- function(df, column_name) {
   return(duplicates)   # Return the resulting dataframe with duplicate values
 }
 
-
-#Function to generate universally unique identifiers (UUIDs) for rows of a dataframe
-generate_uuid <- function(df, new_column = 'UUID') {
-  new_column <- sym(new_column)
-  df %>%
-  mutate(!!new_column := sapply(1:nrow(df), UUIDgenerate)) %>%
-  relocate(!!new_column, .before = 1)
-}
-
-
 #Function to check if a single column has only unique values
 col_all_unique <- function(df, column) {
   df %>%
     bind_rows() %>%
     summarise(all_unique = n_distinct( !!sym(column) ) == n() )
-}
-
-
-#Function to test the penalty on the levenshtein distance for a given multiplier
-test_lev_penalty <- function(multiplier) {
-  vector <- (1:10)**2 * multiplier
-  names(vector) <- 1:10
-  return(vector)
 }

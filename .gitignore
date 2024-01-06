@@ -6,6 +6,6 @@ api_keys
 *.~lock*
 *__pycache__*
 data_retrieval/*csv
-output
+output/data
 projeto
 paper

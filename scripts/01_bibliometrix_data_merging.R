@@ -8,13 +8,7 @@ source('scripts/00_functions.R')
 
 ## Using bibliometrix to merge files (needs a lot of RAM and takes a while to run...)
 
-#Writing function to write merged dfs in a custom output directory
-write_df <- function(df, outdir, filename) {
-  dir.create(outdir, showWarnings = F)
-  write_csv(df, sprintf("%s/%s", outdir, filename))
-}
-
-data_dir <- '/home/gabriel/ufrj_data_backup/data/' #Setting base data directory
+data_dir <- '~/ufrj_data_backup/data/' #Setting base data directory
 outdir <- paste0(data_dir,'/merged_data') #Setting output directory of merged data
 
 ## Merging Dimensions data
@@ -41,17 +35,17 @@ scopus_df <- convert2df(filelist,
 
 write_df(scopus_df, outdir, 'scopus.csv')
 
-## Merging Scopus data (csv)
+## Merging Scopus data (csv) - if i recall correctly, the csv has some fields that the bibtex file doesn't, but bibliometrix documentation https://cran.r-project.org/web/packages/bibliometrix/bibliometrix.pdf) states that the convert2df function only reads bibtex files from scopus (though it appears to read csv files as well)
 
-filelist <-  list.files(path=paste0(data_dir,'/scopus'), 
-                        pattern='^.*.csv$', 
-                        full.names = T)
-
-scopus_df <- convert2df(filelist, 
-                        dbsource = 'scopus', 
-                        format = 'csv')
-
-write_df(scopus_df, outdir, 'scopus_csv.csv')
+#filelist <-  list.files(path=paste0(data_dir,'/scopus'), 
+#                        pattern='^.*.csv$', 
+#                        full.names = T)
+#
+#scopus_df <- convert2df(filelist, 
+#                        dbsource = 'scopus', 
+#                        format = 'csv')
+#
+#write_df(scopus_df, outdir, 'scopus_csv.csv')
 
 
 ## Merging Lens data
@@ -79,20 +73,17 @@ wos_df <- convert2df(filelist,
 write_df(wos_df, outdir, 'wos.csv')
 
 
-### Reading the dfs from the files
+### Reading the dfs from the files (faster than using convert2df each time)
 
-
-#dimensions_df <- read.csv( paste0(outdir,'dimensions.csv') )
+dimensions_df <- read.csv( paste0(outdir,'/dimensions.csv') )
 scopus_df <- read.csv( paste0(outdir,'/scopus.csv') )
-scopus_csv_df <- read.csv( paste0(outdir,'/scopus_csv.csv') )
-#dimensions_df <- read.csv( paste0(outdir,'wos.csv') )
-
-test <- bind_rows()
-
-
+lens_df <- read.csv( paste0(outdir,'/lens.csv') )
+wos_df <- read.csv( paste0(outdir,'/wos.csv') )
 
 ##We'll also be saving these dataframe objects into a .Rdata file 
 
-dfs <- list(dimensions = dimensions_df, lens = lens_df, scopus = scopus_df, wos = wos_df)
+dfs <- list(dimensions = dimensions_df, lens = lens_df, scopus = scopus_df, wos = wos_df) #Merging dataframes into a named list
 
-save(dfs, file = 'output/data/dfs.Rdata')
+dfs <- lapply(dfs, function(db) {select(db, -AB)}) #Removing abstract column 
+
+saveRDS(dfs, file = 'output/data/dfs.rds')
