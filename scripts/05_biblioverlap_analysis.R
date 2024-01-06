@@ -28,8 +28,12 @@ matching_cols <- list(DI = 'DI',
 
 biblioverlap_results  <- readRDS('output/data/biblioverlap_results.rds') #Loading the biblioverlap results
 
-plots$plot_matching_summary <- plot_matching_summary(biblioverlap_results$summary, add_logo = FALSE) #Generating matching_summary
+plots$matching_summary_plot <- matching_summary_plot(biblioverlap_results$summary, add_logo = FALSE) #Generating matching_summary
 
+
+venn_plot()
+
+ggVennDiagram(lapply(db_list_matched[1:2], function(db) db$UUID ), force_upset = TRUE)
 
 ##Generating venn diagram plot
 
