@@ -13,11 +13,6 @@ analyses <- readRDS('output/data/analyses.rds')
 summaries <- readRDS('output/data/summaries.rds')
 
 
-#Get total of documents for each doctype in the raw data 
-raw_dfs %>%
-  bind_rows(.id = 'db') %>%
-  group_by(db, doctype) %>%
-  summarise()
 
 
 #Time to make plots
@@ -36,12 +31,17 @@ total_docs <- data.frame(db = names(raw_dfs),
                          raw = sapply(raw_dfs, nrow),
                          filtered = sapply(dfs, nrow) ) %>% 
   pivot_longer(cols = c(raw, filtered), names_to = 'dataset', values_to = 'count') %>%
-  mutate(dataset = factor(dataset, levels = c('raw', 'filtered')))
+  mutate(dataset = factor(dataset, levels = c('raw', 'filtered'))) %>%
+  group_by(db) %>%
+  mutate(percentage = round( (count / max(count)) * 100, digits = 0))
   
-#View(total_docs)
+View(total_docs)
 
 plots$total_docs <- total_docs %>%
-  ggplot(aes(x = fct_reorder(db, -count), y = count, fill = dataset, label = count)) +
+  ggplot(aes(x = fct_reorder(db, -count), 
+             y = count, 
+             fill = dataset, 
+             label = ifelse(percentage == 100, count, paste0(count, ' (-', 100-percentage, '%)')) )) +
   geom_bar(stat = 'identity', position = position_dodge()) +
   geom_text(position = position_dodge(width = .9), vjust = -0.3) +
   labs(x = "Database", 
