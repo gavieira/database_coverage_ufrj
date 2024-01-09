@@ -82,8 +82,12 @@ wos_df <- read.csv( paste0(outdir,'/wos.csv') )
 
 ##We'll also be saving these dataframe objects into a .Rdata file 
 
-dfs <- list(dimensions = dimensions_df, lens = lens_df, scopus = scopus_df, wos = wos_df) #Merging dataframes into a named list
+dfs <- list(Dimensions = dimensions_df, Lens = lens_df, Scopus = scopus_df, WoS = wos_df) #Merging dataframes into a named list
 
-dfs <- lapply(dfs, function(db) {select(db, -AB)}) #Removing abstract column 
+dfs <- lapply(dfs, function(db) {
+  db %>% 
+    select(-AB) %>%
+    mutate(DT = ifelse(is.na(DT) | DT == '', 'UNIDENTIFIED', DT)) # Replace NA or '' in DT (document type) with 'UNIDENTIFIED'
+  }) #Removing abstract column 
 
-saveRDS(dfs, file = 'output/data/dfs.rds')
+saveRDS(dfs, file = 'output/data/raw_dfs.rds')

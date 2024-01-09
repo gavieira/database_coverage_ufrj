@@ -11,6 +11,27 @@ plots <- list() #variable to hold all plots
 
 db_list <- readRDS('output/data/normalized_dfs.rds') #importing datasets
 
+View(db_list$dimensions)
+
+######Making a plot to show the percentage of DOIless records in each database
+#Necessary to justify why there is a need to match using an approach other than the DOI
+plots$doi_perc <-  db_list %>%
+  bind_rows(.id = 'db') %>%
+  group_by(db) %>%
+  summarise(present = round( ( sum(!is.na(DI)) / length(DI) * 100), digits = 1 ),
+            absent = round( ( sum(is.na(DI)) / length(DI) * 100), digits = 1 ) ) %>%
+  pivot_longer(cols = c(present, absent), names_to = 'doi', values_to = 'perc') %>%
+  mutate(doi = factor(doi, levels = c('present', 'absent'))) %>%
+  ggplot(aes(x = db, y = perc, fill = doi, label = perc)) +
+  geom_bar(stat = 'identity') +
+  geom_text(position = position_stack(vjust = 0.5), size = 7) +
+  labs(x = "Database (db)",
+       y = "Percentage") +
+  scale_fill_manual(values = c('present' = '#00BFC4', 'absent' = '#F8766D'), #Change legend colors
+                    name = "DOI", #Change legend title
+                    labels = c('present' = 'Present', 'absent' = 'Absent')) + # Change legend label
+  theme(text = element_text(size = 17)) #Changing text size
+  
 
 #Creating the list with the names of the columns used for the matching
 matching_cols <- list(DI = 'DI',
@@ -24,16 +45,12 @@ matching_cols <- list(DI = 'DI',
 #saveRDS(biblioverlap_results, 'output/data/biblioverlap_results.rds')
 
 
+
 #####Making biblioverlap plots
 
 biblioverlap_results  <- readRDS('output/data/biblioverlap_results.rds') #Loading the biblioverlap results
 
 plots$matching_summary_plot <- matching_summary_plot(biblioverlap_results$summary, add_logo = FALSE) #Generating matching_summary
-
-
-venn_plot()
-
-ggVennDiagram(lapply(db_list_matched[1:2], function(db) db$UUID ), force_upset = TRUE)
 
 ##Generating venn diagram plot
 

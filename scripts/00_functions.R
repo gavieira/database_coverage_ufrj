@@ -13,16 +13,14 @@ get_duplicates <- function(df, fields = everything()) {
  dups <- df %>%  
    arrange(across({{ fields }})) %>% 
    group_by(across({{ fields }})) %>% 
-   filter(n()>1) %>%
-   mutate_all(as.character) #Normalizing column types here to be able to use bind_rows on the duplicated data
+   filter(n()>1)
  return(dups)
 }
 
 
-#Function to read_in data and:
-#1- add a new column to identify the source database
-#2- remove duplicates (default: use all columns)
-get_cleaned_df <- function(df, fields = everything()) {
+
+#Function to read_in data and perform some cleaning procedures on it
+get_cleaned_df <- function(df) {
   if ('Citing.Works.Count' %in% names(df) ) { #Dealing with some particularities of lens, which is the only database with the 'Citing.Works.Count' field
     df <- df %>% 
       mutate(TC = as.numeric(Citing.Works.Count), #Creating a TC column (which is the field name for citations in other dbs) based on the Citing.Works.Count column
@@ -30,10 +28,11 @@ get_cleaned_df <- function(df, fields = everything()) {
       
   }
   df <- as.data.frame(df)%>%
-    mutate(DT = ifelse(is.na(DT) | DT == '', 'Unidentified', DT)) %>% # Replace NA or '' in DT with 'Unidentified'
+    mutate( across(c(DI, TI, PY), ~ifelse(. == '', NA, .)))  %>%  # Convert empty strings to NA for fields 
   select(-starts_with('X.')) %>% #Additional step to get rid of noninformative columns from WoS datasets
   filter(PY <= 2022) %>% #Keeping only documents published up to 2022
-  distinct(across({{ fields }}), .keep_all = T) 
+  distinct(DI, .keep_all = T) %>% #Keeping only unique DOIs
+  distinct(TI, PY, .keep_all = T)  #Keeping only unique combinations of Title an PubYear
   return(df)
 }
 
@@ -96,7 +95,7 @@ normalize_df <- function(df) {
                        'CONFERENCE PAPER', 'CONFERENCE REVIEW', 'PROCEEDINGS PAPER', 'MEETING ABSTRACT',
                        'ARTICLE; PROCEEDINGS PAPER') ~ 'Proceedings itens', 
              DT %in% c('BOOK', 'BOOK CHAPTER', 'CHAPTER', 'ARTICLE; BOOK CHAPTER', 'REVIEW; BOOK CHAPTER') ~ 'Books and book chapters', #Does not include book reviews
-             DT %in%  c('Unidentified') ~ 'Unidentified', 
+             DT %in%  c('UNIDENTIFIED') ~ 'Unidentified', 
              DT %in%  c('PREPRINT') ~ 'Preprint',
              .default = 'Other')) #Adding a last value to aggregate all other DTs
   
@@ -104,7 +103,13 @@ normalize_df <- function(df) {
 }
 
 
-
+get_doctype_count_df <- function(dfs, count_colname) {
+    doctype_count_df <- dfs %>%
+      bind_rows(.id = 'db') %>%
+      group_by(db, DT) %>%
+      summarize({{count_colname}} := n()) 
+    return(doctype_count_df)
+    }
 
 
 #Function to calculate the h-index

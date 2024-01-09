@@ -1,15 +1,24 @@
 #Loading libraries
 library(tidyverse)
 library(bibliometrix)
-library(patchwork)
 
 #sourcing functions script
 source('scripts/00_functions.R')
 
 #loading .rds objects
+  
+raw_dfs <- readRDS('output/data/raw_dfs.rds')
 dfs <- readRDS('output/data/dfs.rds')
 analyses <- readRDS('output/data/analyses.rds')
 summaries <- readRDS('output/data/summaries.rds')
+
+
+#Get total of documents for each doctype in the raw data 
+raw_dfs %>%
+  bind_rows(.id = 'db') %>%
+  group_by(db, doctype) %>%
+  summarise()
+
 
 #Time to make plots
 plots <- list() #Will hold all plots
@@ -20,21 +29,28 @@ all(sapply(list(names(analyses), names(summaries)), FUN = identical, names(dfs))
 #Since this is True (meaning all lists follow the same order), we can create a vector with database names just once and from any of the 3 lists and use it in apply or map functions for any of the .rds lists
 db_names <- get_db_names(dfs)
 
-#View(analyses)
+
 
 #### Generating a basic plot with the total recovered documents from each database
-plots$total_docs <- data.frame( lapply( analyses, function(x) x[['Articles']] ) ) %>% #Getting dataframe with db as colname and total documents
-  pivot_longer(cols = everything(), names_to = 'db',
-               values_to = 'docs') %>% # Creating a column with db names
-  mutate(perc = round(docs/max(docs) * 100, 1)) %>%
-  ggplot(aes(x = fct_reorder(db, -docs), y = docs, fill = db)) +
-  geom_bar(stat = 'identity', show.legend = FALSE) +
-  #geom_point(alpha = 0.3, show.legend = FALSE) +
-  #geom_line(group = 1, position = "identity", alpha = 0.3, show.legend = FALSE) +
-  geom_text(aes(label = paste(docs," (",perc,"%)", sep = '')), vjust = -0.5) +
-  labs(x = "Database", y = "Documents")
+total_docs <- data.frame(db = names(raw_dfs),
+                         raw = sapply(raw_dfs, nrow),
+                         filtered = sapply(dfs, nrow) ) %>% 
+  pivot_longer(cols = c(raw, filtered), names_to = 'dataset', values_to = 'count') %>%
+  mutate(dataset = factor(dataset, levels = c('raw', 'filtered')))
+  
+#View(total_docs)
 
-#plots$total_docs
+plots$total_docs <- total_docs %>%
+  ggplot(aes(x = fct_reorder(db, -count), y = count, fill = dataset, label = count)) +
+  geom_bar(stat = 'identity', position = position_dodge()) +
+  geom_text(position = position_dodge(width = .9), vjust = -0.3) +
+  labs(x = "Database", 
+       y = "Document count",
+       fill = 'Dataset') +
+  scale_fill_discrete(labels = c('Raw', 'Filtered'))
+
+plots$total_docs
+
 #### Annual production plot
 
 annual_prod <- map2(summaries, db_names, get_info_from_summaries, attribute_name = 'AnnualProduction') %>%
@@ -59,14 +75,19 @@ plots$annual_prod_bar <-  ggplot(annual_prod %>%
   geom_text(aes(label = count), size = 3, angle = 270, position = position_stack(vjust = 0.5)) + #Adding number of documents to each bar stack
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) #Changing the angle and position of x axis labels
   
+plots$annual_prod_bar
 
 # Generating year plot with lines and points (absolute document count)
 plots$annual_prod_line <- ggplot(annual_prod) +
   aes(x = year, y = count, group = db, color = db) +
   geom_line() +
   geom_point() +
+  labs(x = 'Year',
+       y = 'Document count',
+       color = 'Database') +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 
+plots$annual_prod_line
 
 #Plots from the 'MainInformationDF' summary attribute
 
@@ -102,11 +123,13 @@ main_info_wide <- main_info %>%
 #Getiing only doctype columns
 doctypes <- main_info %>%
   filter(data_type == 'doctype') %>% #Keeping only 'doctype' rows
-  mutate(result = as.numeric(result)) %>% #Changing result column to numeric in order to be able to perform operations on it
+  mutate(result = as.numeric(result), #Changing result column to numeric in order to be able to perform operations on it
+         description = toupper(description), #Converting doctypes to uppercase
+         description = ifelse(description == 'CONFERENCE PROCEEDINGS ARTICLE', 'PROCEEDINGS ARTICLE', description)) %>% #Substituting a reasonably long doctype
   select(-data_type) #Removing data_type column (no longer needed, since our df already has only doctype rows)
   
 
-#View(doctypes)
+View(doctypes)
 
 
 ###Making a faceted barplot with each db and their respective document types and counts. Order the doctypes in each facet by descending doc_count.
@@ -116,8 +139,8 @@ doctypes <- main_info %>%
 #To order within each facet, we have used acylam's suggestion (https://stackoverflow.com/questions/47580160/reorder-ggplot-barplot-x-axis-by-facet-wrap), ordering our dataframe and generating a new factor column with unique levels to be used as x-axis labels and then relabeling the x-axis with scale_x_discrete().
 doctypes <- doctypes %>% 
   arrange(desc(result)) %>% #Sorting by descending results
-  unite('id', description,db, sep='_', remove = FALSE) %>% #Creating new unique 'id' column by merging 'description' and 'db' cols
-  mutate(id = factor(id, levels=id)) #Converting 'id' column to factor
+  mutate(id = paste0(description, '_', db),
+         id = factor(id, levels=id)) 
   
 
 #Additionally, we want to plot how many doctypes are in each database
@@ -135,15 +158,15 @@ ggplot( aes(x = id, y = result, color = db) ) +
   geom_bar(stat='identity') + 
   geom_text(aes(label = result), size = 3.5, color = 'black', vjust= -.5) + #Adding number of documents to each bar stack
   geom_text(x = Inf, y = 75000, size = 5,  color = 'black', aes(label = label), data = doctypes_labels, hjust=1.2) + #Annotating each facet with 'doctypes_labels'
-  xlab('doctypes') +
-  ylab('doc_count') +
   scale_x_discrete(breaks = doctypes$id,
                    labels = doctypes$description) + #Changing x-axis label names
   scale_y_continuous(expand = expansion(mult = .1)) + #Expanding y scale to fit number of documents over each bar stack
+  labs(x = 'Document type',
+       y = 'Document count') +
   theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1),  legend.position = "none")
 
 
-#plots$doctypes_bar
+plots$doctypes_bar
 
 
 ### Each database uses their own set of categories for document classification, which makes it very difficult to compare them. To address this issue, we'll apply a normalized classification to our data.
@@ -204,24 +227,60 @@ cat(paste("'", unique(doctypes$description[!doctypes$description %in% c('article
 
 ##### Now that the main_info data is normalized, we can make a new bar plot to compare the databases
 
-plots$doctypes_bar_normalized <- doctypes_normalized %>%
-  group_by(db) %>%
-  mutate(percentage = round( result/sum(result) * 100, 1 ), #Adding a percentage column
-         description = factor(description, #Converting the description column to a factor to order the x-axis of the following plot in a convenient order
-                              levels = c('Articles', 'Proceedings itens', 'Books and book chapters', 'Preprint', 'Unidentified', 'Other') ) ) %>%
-ggplot( aes(x = description, y = result, color = db) ) +
-  facet_grid(vars(db)) + #Freeing x axis allows to only plot bars for doctypes that actually occur in the database
-  geom_bar(stat='identity') + 
-  geom_text(aes(label = paste(result, ' (', percentage, '%)', sep = '')), size = 4, color = 'black', vjust= -0.5) + #Adding number of documents to each bar stack
-  xlab('doctypes') +
-  ylab('doc_count') +
-  ylim(0,95000) +
-  #scale_y_continuous(expand = expansion(mult = .2)) + #Expanding y scale to fit number of documents over each bar stack
-  theme(legend.position = "none")
-  #theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1), legend.position = "none")
 
-#plots$doctypes_bar_normalized
+norm_raw_doctypes <- lapply(raw_dfs, function(df) normalize_df(df)) %>%
+  get_doctype_count_df(count_colname = 'raw')
+
+norm_dfs_doctypes <- lapply(dfs, function(df) normalize_df(df)) %>%
+  get_doctype_count_df(count_colname = 'filtered')
+  
+
+norm_doctypes <- left_join(norm_raw_doctypes, norm_dfs_doctypes, by = join_by(db,DT)) %>% #Joining the two summaries
+  pivot_longer(cols = c(raw, filtered), names_to = 'dataset', values_to = 'count') %>% #Converting count columns into a single long one
+  mutate(dataset = factor(dataset, levels = c('raw', 'filtered')),
+         DT = factor(DT, levels = c('Articles', 'Proceedings itens', 'Books and book chapters', 'Preprint', 'Unidentified', 'Other'))) #Ordering factors
+
+
+
+plots$doctypes_bar_normalized <- norm_doctypes %>%
+  ggplot( aes(x = DT, y = ifelse(count < 400, 400, count), fill = dataset, label = count) ) + #ifelse used to generate a thin bar below lower values
+    facet_grid(vars(db)) + #Freeing x axis allows to only plot bars for doctypes that actually occur in the database
+    geom_bar(stat='identity', position = position_dodge()) + 
+    geom_text(position = position_dodge(width = .9), vjust = -0.3) +
+    #geom_text(aes(label = paste(result, ' (', percentage, '%)', sep = '')), size = 4, color = 'black', vjust= -0.5) + #Adding number of documents to each bar stack
+    ylim(0,95000) +
+    labs(x = "Document types",
+         y = "Document count",
+         fill = 'Dataset') +
+  scale_fill_discrete(labels = c('Raw', 'Filtered'))
+
+
+plots$doctypes_bar_normalized
+
+
+#lapply(norm_raw_dfs, function(df) unique(df$DT))
+#lapply(norm_dfs, function(df) unique(df$DT))
+#
+#plots$doctypes_bar_normalized <- doctypes_normalized %>%
+#  group_by(db) %>%
+#  mutate(percentage = round( result/sum(result) * 100, 1 ), #Adding a percentage column
+#         description = factor(description, #Converting the description column to a factor to order the x-axis of the following plot in a convenient order
+#                              levels = c('Articles', 'Proceedings itens', 'Books and book chapters', 'Preprint', 'Unidentified', 'Other') ) ) %>%
+#ggplot( aes(x = description, y = result, color = db) ) +
+#  facet_grid(vars(db)) + #Freeing x axis allows to only plot bars for doctypes that actually occur in the database
+#  geom_bar(stat='identity') + 
+#  geom_text(aes(label = paste(result, ' (', percentage, '%)', sep = '')), size = 4, color = 'black', vjust= -0.5) + #Adding number of documents to each bar stack
+#  xlab('doctypes') +
+#  ylab('doc_count') +
+#  ylim(0,95000) +
+#    scale_y_log10() +
+#  labs(x = "Document types",
+#       y = "Document count") +
+#  theme(legend.position = "none")
+#
+##plots$doctypes_bar_normalized
 
 
 #Saving all plots
 save_plot_list(plots)
+
