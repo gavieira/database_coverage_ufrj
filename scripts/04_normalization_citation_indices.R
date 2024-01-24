@@ -67,6 +67,10 @@ plots$citation_histogram <- citation_data %>%
   facet_wrap(~ db, scale = 'free_x', ncol = 1) +
   scale_x_continuous(breaks = c(1,seq(5,100, by=5), 105),
                      labels = c(1,seq(5,100, by=5), 'Inf')) +
+  labs(x = 'Number of citations', 
+       y = 'Document count',
+       fill = 'Decade') +
+  
   theme(panel.grid.minor.x = element_blank())
 
 plots$citation_histogram
@@ -76,7 +80,9 @@ plots$citation_histogram
 
 citation_metrics <- citation_data %>% 
   group_by(db) %>% 
-  summarise(hindex = hindex(citations),
+  summarise(n_articles = n(),      
+            total_citations = sum(citations), 
+            hindex = hindex(citations),
             eindex = eindex(citations),
             gindex = gindex(citations),
             hcindex = hcindex(citations = citations, pubyear = year),
@@ -108,7 +114,7 @@ citation_decade_summary <- citation_data %>%
   mutate(index_normalized = index_value/sum(index_value),
          index_type = factor(index_type, levels = c('n_docs', 'mean_citations', 'total_citations', 'hindex', 'eindex', 'gindex', 'hcindex', 'i10index')))
 
-#View(citation_decade_summary)
+View(citation_decade_summary)
 
 
 # Make annual production plot like the one from bibliometrix's Author's production over time, where:
@@ -148,6 +154,7 @@ plots$decade_prod_facets <- citation_decade_summary %>%
   geom_point() +
   #geom_smooth(aes(group = db), se = F, alpha = .8) +
   geom_line(aes(group = db), linetype = 2, alpha = .8) +
+  labs(x = 'Decade', y = 'Index value', color = 'Database') +
   facet_wrap(~ index_type, scales = 'free', ncol = 2, 
              labeller = labeller(index_type = function(label) ifelse(label == "n_docs", "n_articles", label))) #Changing title of 'n_docs' 
 #theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1))

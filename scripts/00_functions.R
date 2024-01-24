@@ -1,5 +1,6 @@
 library(tidyverse)
 library(bibliometrix)
+library(biblioverlap)
 
 #Function to write merged dfs in a custom output directory
 write_df <- function(df, outdir, filename) {
@@ -10,7 +11,8 @@ write_df <- function(df, outdir, filename) {
 
 #Function to extract duplicates based on fields
 get_duplicates <- function(df, fields = everything()) {
- dups <- df %>%  
+ dups <- df %>%
+   mutate( across({{ fields }}, ~ifelse(. == '', NA, .)))  %>%  # Convert empty strings to NA for fields  
    arrange(across({{ fields }})) %>% 
    group_by(across({{ fields }})) %>% 
    filter(n()>1)
@@ -27,15 +29,36 @@ get_cleaned_df <- function(df) {
              AU_CO = as.character(AU_CO)) #Converting the AU_CO field into character (it has only NAs, so R reads it automatically as a boolean col)
       
   }
+  
   df <- as.data.frame(df)%>%
-    mutate( across(c(DI, TI, PY), ~ifelse(. == '', NA, .)))  %>%  # Convert empty strings to NA for fields 
-  select(-starts_with('X.')) %>% #Additional step to get rid of noninformative columns from WoS datasets
-  filter(PY <= 2022) %>% #Keeping only documents published up to 2022
-  distinct(DI, .keep_all = T) %>% #Keeping only unique DOIs
-  distinct(TI, PY, .keep_all = T)  #Keeping only unique combinations of Title an PubYear
-  return(df)
+    mutate( across(c(DI, TI, SR_FULL), ~ifelse(. == '', NA, .)))  %>%  # Convert empty strings to NA for fields  
+    filter(!(is.na(DI) & is.na(TI))) %>% #removes rows where both DI and TI are NA (can't determine uniqueness without these fields)
+    select(-starts_with('X.')) %>% #Additional step to get rid of noninformative columns from WoS datasets 
+    filter(PY <= 2022) #Keeping only documents published up to 2022
+  
+  no_dupes <- df %>%
+    filter(!is.na(DI)) %>% # Removes DOIless records (quite a significant amount of records)
+    distinct(DI, .keep_all = TRUE) %>% #Keeps unique DOI records
+    bind_rows(., filter(df, is.na(DI))) %>% # Reinserts DOIless records at the end of the dataframe, which is useful in the next filter (gets as many docs with DOI as possible)
+    distinct(TI, SR_FULL, .keep_all = TRUE) %>%
+    mutate()
+  
+  return(no_dupes)
 }
 
+
+#Function for internal testing
+check_na <- function(db_list, colname) {
+  lapply(db_list, function(df) {nrow(df %>% 
+                                       mutate( across(everything(), ~ifelse(. == '', NA, .)))  %>%
+                                       filter(is.na({{colname}})))})
+}
+
+#Function for internal testing
+get_dupes <- function(df, cols) {
+    is_duplicate <- duplicated(df[, cols], incomparables = NA) | duplicated(df[, cols], fromLast = TRUE, incomparables = NA) 
+    return(df[is_duplicate, c('DI', 'TI', 'DT', 'AU', 'SO', 'J9', 'PY', 'SR', 'SR_FULL')])
+}
 
 #Getting name of databases from list objects
 get_db_names <- function(dblist){
@@ -103,11 +126,13 @@ normalize_df <- function(df) {
 }
 
 
-get_doctype_count_df <- function(dfs, count_colname) {
+get_doctype_count_df <- function(dfs) {
     doctype_count_df <- dfs %>%
       bind_rows(.id = 'db') %>%
       group_by(db, DT) %>%
-      summarize({{count_colname}} := n()) 
+      summarize(doc_count = n()) %>%
+      ungroup() %>%
+      complete(db, DT, fill = list(doc_count = 0))
     return(doctype_count_df)
     }
 
@@ -192,9 +217,14 @@ custom_venn <- function(uuid_list, title) {
 }
 
 
-venn_by_doctype <- function(doctype = "All", db_list_matched) {
+venn_by_doctype <- function(doctype = "All", db_list_matched, all_matches = TRUE) {
   if (doctype != 'All') {
-    db_list_matched <- lapply(db_list_matched, function(db)  db %>% filter(DT == doctype) )
+    db_list_subset <- lapply(db_list_matched, function(db)  db %>% filter(DT == doctype) )
+    if (all_matches) {
+      db_list_matched <- get_all_subset_matches(db_list_subset, db_list_matched)
+    } else {
+      db_list_matched <- db_list_subset
+    }
   } #Filtering records for a given doctype (if necessary)
   uuid_list <- lapply(db_list_matched, function(db) db$UUID) #Extracting UUID list for each base
   if (length(uuid_list) < 2) {

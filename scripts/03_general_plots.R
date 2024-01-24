@@ -7,12 +7,12 @@ source('scripts/00_functions.R')
 
 #loading .rds objects
   
-raw_dfs <- readRDS('output/data/raw_dfs.rds')
 dfs <- readRDS('output/data/dfs.rds')
 analyses <- readRDS('output/data/analyses.rds')
 summaries <- readRDS('output/data/summaries.rds')
 
 
+View(dfs)
 
 
 #Time to make plots
@@ -27,27 +27,21 @@ db_names <- get_db_names(dfs)
 
 
 #### Generating a basic plot with the total recovered documents from each database
-total_docs <- data.frame(db = names(raw_dfs),
-                         raw = sapply(raw_dfs, nrow),
-                         filtered = sapply(dfs, nrow) ) %>% 
-  pivot_longer(cols = c(raw, filtered), names_to = 'dataset', values_to = 'count') %>%
-  mutate(dataset = factor(dataset, levels = c('raw', 'filtered'))) %>%
-  group_by(db) %>%
-  mutate(percentage = round( (count / max(count)) * 100, digits = 0))
+total_docs <- data.frame(db = names(dfs),
+                         doc_count = sapply(dfs, nrow) ) %>% 
+  mutate(percentage = round( (doc_count / max(doc_count)) * 100, digits = 0))
   
 View(total_docs)
 
 plots$total_docs <- total_docs %>%
-  ggplot(aes(x = fct_reorder(db, -count), 
-             y = count, 
-             fill = dataset, 
-             label = ifelse(percentage == 100, count, paste0(count, ' (-', 100-percentage, '%)')) )) +
-  geom_bar(stat = 'identity', position = position_dodge()) +
+  ggplot(aes(x = fct_reorder(db, -doc_count), 
+             y = doc_count, 
+             fill = db, 
+             label = paste0(doc_count, ' (', percentage, '%)') )) +
+  geom_bar(stat = 'identity', position = position_dodge(), show.legend = FALSE) +
   geom_text(position = position_dodge(width = .9), vjust = -0.3) +
   labs(x = "Database", 
-       y = "Document count",
-       fill = 'Dataset') +
-  scale_fill_discrete(labels = c('Raw', 'Filtered'))
+       y = "Document count")
 
 plots$total_docs
 
@@ -58,16 +52,17 @@ annual_prod <- map2(summaries, db_names, get_info_from_summaries, attribute_name
   rename('year' = 1, 'count' = 2 ) %>%
   mutate(year = as.character(year))
 
-#View(annual_prod)
+View(annual_prod)
 
 
 ##Year plots with bar lines 
 ##Stacked bars are percentages and absolute document counts appear as numbers (geom_text layers) inside the bars
-plots$annual_prod_bar <-  ggplot(annual_prod %>% 
+plots$annual_prod_bar <- annual_prod %>% 
+         mutate(db = )
          group_by(year) %>% #grouping the base df it by year
          mutate(freq = (count / sum(count)) * 100) %>% #calculating new column (frequency of documents per year for each bibliometric database)
          ungroup()) + 
-  aes(x = year, y = freq, fill = db) +
+  ggplot(aes(x = year, y = freq, fill = db)) +
   geom_bar(stat="identity")  +
   geom_hline(yintercept = seq(0, 100, by=25), color='white', alpha = .3) + # adding layer to make y axis lines visible over bar plot 
   labs(x = 'Year', y = "Frequency (%)", fill = 'Database') + #changing labels
@@ -225,37 +220,33 @@ cat(paste("'", unique(doctypes$description[!doctypes$description %in% c('article
 #View(doctypes_normalized)
   
 
-##### Now that the main_info data is normalized, we can make a new bar plot to compare the databases
+##### We can make a new bar plot to compare the databases after normalization
 
-
-norm_raw_doctypes <- lapply(raw_dfs, function(df) normalize_df(df)) %>%
-  get_doctype_count_df(count_colname = 'raw')
-
-norm_dfs_doctypes <- lapply(dfs, function(df) normalize_df(df)) %>%
-  get_doctype_count_df(count_colname = 'filtered')
+norm_doctypes <- lapply(dfs, function(df) normalize_df(df)) %>%
+  get_doctype_count_df() %>%
+  mutate(DT = factor(DT, levels = c('Articles', 'Proceedings itens', 'Books and book chapters', 'Preprint', 'Unidentified', 'Other'))) %>% #Ordering factors
+  group_by(db) %>%
+  mutate(percentage = round( (doc_count / sum(doc_count)) * 100, digits = 1  )) #Calculating percentage column
+  
+  
   
 
-norm_doctypes <- left_join(norm_raw_doctypes, norm_dfs_doctypes, by = join_by(db,DT)) %>% #Joining the two summaries
-  pivot_longer(cols = c(raw, filtered), names_to = 'dataset', values_to = 'count') %>% #Converting count columns into a single long one
-  mutate(dataset = factor(dataset, levels = c('raw', 'filtered')),
-         DT = factor(DT, levels = c('Articles', 'Proceedings itens', 'Books and book chapters', 'Preprint', 'Unidentified', 'Other'))) #Ordering factors
-
+View(norm_doctypes)
 
 
 plots$doctypes_bar_normalized <- norm_doctypes %>%
-  ggplot( aes(x = DT, y = ifelse(count < 400, 400, count), fill = dataset, label = count) ) + #ifelse used to generate a thin bar below lower values
-    facet_grid(vars(db)) + #Freeing x axis allows to only plot bars for doctypes that actually occur in the database
-    geom_bar(stat='identity', position = position_dodge()) + 
-    geom_text(position = position_dodge(width = .9), vjust = -0.3) +
-    #geom_text(aes(label = paste(result, ' (', percentage, '%)', sep = '')), size = 4, color = 'black', vjust= -0.5) + #Adding number of documents to each bar stack
-    ylim(0,95000) +
-    labs(x = "Document types",
-         y = "Document count",
-         fill = 'Dataset') +
-  scale_fill_discrete(labels = c('Raw', 'Filtered'))
+  filter(doc_count != 0) %>%  # Filter out rows where doc_count is 0 (to have no thin color bar for when this happens)
+  ggplot(aes(x = DT, y = doc_count, color = db )) +
+  facet_grid(vars(db)) +
+  #facet_grid(vars(factor(db, levels = c('Lens', 'Scopus', 'Dimensions', 'WoS')))) +
+  geom_bar(stat='identity', position = position_dodge(), show.legend = FALSE) +
+  geom_text(data = norm_doctypes, aes(label = paste0(doc_count, ' (', percentage, '%)')), position = position_dodge(width = .9), color = 'black', vjust = -0.3) + #reusing original data to add 0 using this geom
+  ylim(0, 95000) +
+  labs(x = "Document types",
+       y = "Document count",
+       fill = 'Dataset')
 
-
-plots$doctypes_bar_normalized
+plots$doctypes_bar_normalized 
 
 
 #lapply(norm_raw_dfs, function(df) unique(df$DT))
@@ -278,9 +269,8 @@ plots$doctypes_bar_normalized
 #       y = "Document count") +
 #  theme(legend.position = "none")
 #
-##plots$doctypes_bar_normalized
+#plots$doctypes_bar_normalized
 
 
 #Saving all plots
 save_plot_list(plots)
-

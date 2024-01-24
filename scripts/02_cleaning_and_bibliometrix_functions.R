@@ -28,12 +28,12 @@ duplicates_di <- mclapply(dfs, function(df) {
                    filter(!is.na(DI))
   }, mc.cores = 4)
 
-#Getting rows with duplicated TITLE and PUBLICATION YEAR
-duplicates_ti <- mclapply(dfs, function(df) {
-  get_duplicates(df, fields = c('TI', 'PY')) %>%
-    filter(!is.na(TI) | !is.na(PY))
-}, mc.cores = 4)
 
+#Getting rows with duplicated TITLE and SHORT FULL REFERENCE
+duplicates_ti <- mclapply(dfs, function(df) {
+  get_duplicates(df, fields = c('TI', 'SR_FULL')) %>%
+    filter( !(is.na(TI) & is.na(SR_FULL)) )
+}, mc.cores = 4)
 
 View(duplicates_di)
 View(duplicates_ti)
@@ -65,6 +65,7 @@ write_csv(duplicates_df, 'output/data/duplicates.csv')
 #Getting data into a single deduplicated dataframe (Title and PUBLICATION YEAR)
 
 dfs <- lapply(dfs, function(df) get_cleaned_df(df) )
+
 saveRDS(dfs, file = 'output/data/dfs.rds')
 
 
