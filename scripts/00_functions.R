@@ -101,7 +101,8 @@ normalize_df <- function(df) {
     filter(!is.na(PY)) %>% #Removing any documents with unknown publication year
     remove_rownames %>% # Removing rownames from the dataframe
     select(DB, DI, TI, DT, PY, SO, J9, TC, AU) %>%
-    mutate(AU = sub(";.*$", "", AU), #Getting only the first author from the 'AU' column; patter removes text after the first ';' separator
+    mutate(DT_OR = DT, #Saving original doctypes to new column
+      AU = sub(";.*$", "", AU), #Getting only the first author from the 'AU' column; patter removes text after the first ';' separator
            decade = case_when( #Adding decade of document
              PY < 1983 ~ decades[1],
              between(PY, 1983,1992) ~ decades[2],

@@ -196,3 +196,32 @@ other_doctype_matches <- get_all_subset_matches(other_subset, db_list_matched) %
   mutate(perc = round( (count / sum(count)) * 100, digits = 2 ) )
 
 View(other_doctype_matches)
+
+
+
+#Obtaining venn diagram for articles with:
+#0 cites in Lens/Dimensions
+#1+ cites in Wos/Scopus
+
+articles <- setNames(lapply(1:length(db_list_matched), function(index) {
+  new_df <- db_list_matched[[index]] %>%
+    filter(DT == 'Articles')
+  new_df['db'] <- names(db_list_matched)[[index]] #Adding column with database name
+  return(new_df)
+}), names(db_list_matched) )
+
+articles_citation_filtered <- lapply(articles, function(df) {
+  if (unique(df[['db']]) %in% c('Lens', 'Dimensions')) {
+    return(filter(df, TC == 0))
+  } else {
+    return(filter(df, TC == 0))
+  }
+})
+
+View(articles_citation_filtered)
+
+ggVennDiagram(lapply(articles_citation_filtered, function(df) df$UUID))
+
+
+#Biblioverlap plot with documents classified as 'review' in WoS and Scopus
+

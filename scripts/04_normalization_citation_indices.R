@@ -12,7 +12,7 @@ dfs <- readRDS('output/data/dfs.rds')
 normalized_dfs <- lapply(dfs, function(df) normalize_df(df))
 
 
-#View(normalized_dfs)
+View(normalized_dfs)
 
 saveRDS(normalized_dfs, file = 'output/data/normalized_dfs.rds')
 
@@ -22,6 +22,11 @@ table(normalized_dfs$lens$DT)
 ## In order to calculate citation metrics like the h-index, we'll need to extract a subset of the normalized data 
 
 normalized_dfs <- readRDS('output/data/normalized_dfs.rds')
+
+sum(citation_data$Dimensions$TC == 0)
+sum(normalized_dfs$Lens$TC == 0)
+sum(normalized_dfs$Scopus$TC == 0)
+sum(normalized_dfs$WoS$TC == 0)
 
 citation_data <- normalized_dfs %>%
   bind_rows(.id = 'db') %>% #Taking dataframes in list and binding them by row, while appending a 'db' column with database name
@@ -33,8 +38,11 @@ citation_data <- normalized_dfs %>%
   filter(doctype == 'Articles') #We'll use only articles to calculate citation indices
 
 
-#View(citation_data)
-
+citation_data %>%
+  #filter(between(citations, 0, 1)) %>%
+  filter(citations == 0) %>%
+  group_by(db) %>%
+  summarise(count = n())
 
 ##Plotting decade production (in terms of articles)
 
@@ -51,7 +59,7 @@ citation_data <- normalized_dfs %>%
 #
 #plots$decade_prod_line
 
-View(citation_data)
+  
 
 ##Ploting citation histogram
 
@@ -59,22 +67,48 @@ plots$citation_histogram <- citation_data %>%
   group_by(db) %>%
   mutate(citations = ifelse(citations > 100, 101, citations)) %>% #this will be necessary to plot the long tail
   ggplot(aes(x = citations)) +
-  geom_histogram(aes(fill = decade), breaks = c(0, 1, seq(5,100, by=5), 105), color = 'black') +
+  geom_histogram(aes(fill = decade), breaks = c(0, 1, seq(5,100, by=5), 105), closed = 'left', color = 'black') +
+  geom_density(aes(x = citations), 
+               stat = 'count', 
+               color = 'white', 
+               linetype = 'dashed') + # Add density plot
   geom_text(aes(label = after_stat(count)), 
-            stat = 'bin', breaks = c(0, 1, seq(5,100, by=5), 105), 
+            stat = 'bin', breaks = c(0, 1, seq(5,100, by=5), 105), closed = 'left',
             size = 3, 
-            nudge_y = 3000) + #Adding number of documents to each bar stack
+            nudge_y = 1500,
+            hjust = rep(c(.9, rep(0.5, 21)), 4), # Nudging the first label of each facet a little bit to the left
+            ) + #Adding number of documents to each bar stack
+  facet_wrap(~ db, scale = 'free_x',  ncol = 1) +
+  scale_x_continuous(breaks = c(1,seq(5,100, by=5), 105),
+                     labels = c(1,seq(5,100, by=5), 'Inf')) +
+  labs(x = 'Number of citations', 
+       y = 'Document count',
+       fill = 'Decade') +
+  theme(panel.grid.minor.x = element_blank())
+
+plots$citation_histogram
+
+
+#View all bars to make sure that the most common documents are the ones without citation
+citation_data %>%
+  group_by(db) %>%
+  mutate(citations = ifelse(citations > 100, 101, citations)) %>% #this will be necessary to plot the long tail
+  ggplot(aes(x = citations)) +
+  geom_histogram(aes(fill = decade), breaks = c(0, seq(1,100), 105), color = 'black') +
+  #geom_text(aes(label = after_stat(count)), 
+  #          stat = 'bin', breaks = c(0, seq(1,100, by=1), 105), closed = 'left',
+  #          size = 3, 
+  #          angle = 90,
+  #          nudge_y = 3000
+  #          ) + #Adding number of documents to each bar stack
   facet_wrap(~ db, scale = 'free_x', ncol = 1) +
   scale_x_continuous(breaks = c(1,seq(5,100, by=5), 105),
                      labels = c(1,seq(5,100, by=5), 'Inf')) +
   labs(x = 'Number of citations', 
        y = 'Document count',
        fill = 'Decade') +
-  
   theme(panel.grid.minor.x = element_blank())
-
-plots$citation_histogram
-
+  
 #Calculating h-index and other metrics (Garner et al., 2017)
 #OBS: calculation of the m-quotient doesn't seem to make sense, since the sole purpose of this index is account for researchers of varying age, and we are not comparing different institutions
 
@@ -91,7 +125,7 @@ citation_metrics <- citation_data %>%
 
 #saveRDS(citation_metrics, 'output/data/citation_metrics.rds') #Saving citation metrics to a .rds file
 
-#View(citation_metrics)
+View(citation_metrics)
 
 #Getting dataframe with citations info summarised per decade and database 
 
