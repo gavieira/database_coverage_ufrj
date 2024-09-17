@@ -12,6 +12,7 @@ plots <- list() #variable to hold all plots
 db_list <- readRDS('output/data/normalized_dfs.rds') #importing datasets
 
 
+View(db_list)
 ######Making a plot to show the percentage of DOIless records in each database
 #Necessary to justify why there is a need to match using an approach other than the DOI
 
@@ -87,11 +88,10 @@ matching_cols <- list(DI = 'DI',
                       AU = 'AU',
                       SO = 'J9')
 
+
 ##Running biblioverlap function and saving the results to a rds file
 #biblioverlap_results <- biblioverlap(db_list, matching_fields = matching_cols, n_threads = 16)
 #saveRDS(biblioverlap_results, 'output/data/biblioverlap_results.rds')
-
-
 
 #####Making biblioverlap plots
 
@@ -102,6 +102,8 @@ plots$matching_summary_plot <- matching_summary_plot(biblioverlap_results$summar
 ##Generating venn diagram plot
 
 db_list_matched <- biblioverlap_results$db_list #saving db_list from biblioverlap in another object
+
+View(db_list_matched)
 
 ##Venn diagram for several doctypes
 doctypes <- c("All", "Articles", "Proceedings itens", "Books and book chapters", "Other")
@@ -151,10 +153,6 @@ plots$venn_all_matches <- wrap_plots(venn_all_matches[venn_order], ncol = 3, ) +
 
 plots$venn_all_matches
 
-####Saving all plots to files
-save_plot_list(plots)
-
-
 
 ##Obtaining documents that have been matched
 matched_recs <- db_list_matched %>%
@@ -198,7 +196,6 @@ other_doctype_matches <- get_all_subset_matches(other_subset, db_list_matched) %
 View(other_doctype_matches)
 
 
-
 #Obtaining venn diagram for articles with:
 #0 cites in Lens/Dimensions
 #1+ cites in Wos/Scopus
@@ -222,6 +219,52 @@ View(articles_citation_filtered)
 
 ggVennDiagram(lapply(articles_citation_filtered, function(df) df$UUID))
 
+#Biblioverlap plot with documents classified as 'REVIEW' in WoS and Scopus's original classification
 
-#Biblioverlap plot with documents classified as 'review' in WoS and Scopus
+review_db_list <- map(db_list_matched, ~ filter(., DT_OR == 'REVIEW'))
 
+review_all_matches <- get_all_subset_matches(review_db_list, db_list_matched)
+
+
+
+table(review_all_matches$Dimensions$DT_OR) #Doctypes in Dimensions matched against documents classified as 'REVIEW'
+table(review_all_matches$Lens$DT_OR) #Doctypes in Lens matched against documents classified as 'REVIEW'
+
+plots$reviews_coverage <- venn_plot(review_all_matches, add_logo = FALSE) +
+  #ggtitle('Reviews') +
+  theme(plot.title = element_text(hjust = 0.5, size=24),
+        legend.position = 'none')
+  
+plots$reviews_coverage
+
+#Biblioverlap plot with documents classified as 'OTHER'
+
+other_db_list <- map(db_list_matched, ~ filter(., DT == 'Other'))
+
+other_all_matches <- get_all_subset_matches(other_db_list, db_list_matched)
+
+other_all_matches_merged <- other_all_matches %>% bind_rows(.id = 'db')
+
+other_all_matches_wide <- other_all_matches_merged %>% 
+  group_by(db) %>%
+  count(DT) %>%
+  pivot_wider(names_from = db, values_from = n, values_fill = 0)
+
+other_totals <- other_all_matches_wide %>%
+  summarise(across(where(is.numeric), sum)) %>%
+  mutate(DT = "TOTAL")
+  
+other_wide_totals <- other_all_matches_wide %>%
+  bind_rows(other_totals)
+
+View(other_wide_totals)
+
+plots$other_coverage <- venn_plot(other_all_matches, add_logo = FALSE) +
+  #ggtitle('Reviews') +
+  theme(plot.title = element_text(hjust = 0.5, size=24),
+        legend.position = 'none')
+
+plots$other_coverage
+
+####Saving all plots to files
+save_plot_list(plots)
