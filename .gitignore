@@ -7,6 +7,7 @@ api_keys
 *__pycache__*
 data_retrieval/*csv
 output/data
+output/plots/ptbr*
 projeto
 paper
 output
