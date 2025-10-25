@@ -1,6 +1,7 @@
 library(tidyverse)
 library(bibliometrix)
 library(biblioverlap)
+library(ggplot2)
 
 #Function to write merged dfs in a custom output directory
 write_df <- function(df, outdir, filename) {
@@ -252,3 +253,37 @@ col_all_unique <- function(df, column) {
     bind_rows() %>%
     summarise(all_unique = n_distinct( !!sym(column) ) == n() )
 }
+
+
+# Colorblind palette : Okabe-Ito
+#palette.colors(palette = "Okabe-Ito", names=TRUE) #Getting the palette from R
+# black        orange       skyblue   bluishgreen        yellow          blue    vermillion reddishpurple          gray 
+# "#000000"     "#E69F00"     "#56B4E9"     "#009E73"     "#F0E442"     "#0072B2"     "#D55E00"     "#CC79A7"     "#999999" 
+
+okabe_ito <- c(
+  "#E69F00",  # Orange
+  "#56B4E9",  # Sky Blue
+  "#009E73",  # Bluish Green
+  "#F0E442",  # Yellow
+  "#0072B2",  # Blue
+  "#D55E00",  # Vermilion
+  "#CC79A7",  # Reddish Purple
+  "#999999",   # Gray
+  "#000000"   # Black
+) #Removed the black color
+
+
+#custom colorblind and grayscale convertable palette
+
+grayscale_colorblind <- c(
+  "#2C4582",  # Dark Blue
+  "#4C8C5C",  # Muted Green
+  "#D79A1B",  # Warm Yellow
+  "#E1D1A5",  # Soft Beige
+  "#F0F0F0",  # Light Gray
+  "#FFFFFF"   # White
+)
+
+# Set the default discrete color and fill scales (ggplot2)
+scale_color_discrete <- function(...) scale_color_manual(values = grayscale_colorblind, ...)
+scale_fill_discrete <- function(...) scale_fill_manual(values = grayscale_colorblind, ...)

@@ -38,23 +38,44 @@ doi_count <- bind_rows(doi_dt, doi_all) %>% #Merging the two tables, and adding 
        group_by(db, DT) %>% 
        mutate(perc = round( count / sum(count) * 100, digits = 1) )
 
-#View(doi_count)
-
+View(doi_count)
 
 plots$doi_count <- doi_count %>% #Making a faceted barplot for DOi presence/absence in each database
-  ggplot(aes(x = DT, y = ifelse(between(count, 1, 400), 400, count),  count, 
+  ggplot(aes(x = DT, y = ifelse(between(count, 1, 600), 600, count),  count, 
              fill = doi, 
-             label = ifelse(is.na(perc) | perc == 0, count, paste0(count, ' (', perc,'%)') ) ) ) +
+             label = ifelse(is.na(perc) | perc == 0, count, paste0(count, '\n(', perc,'%)') ) ) ) +
   facet_wrap(~db, nrow = 4, strip.position = 'right') +
   geom_bar(stat = 'identity', position = position_dodge()) +
-  geom_text(position = position_dodge(width = 0.9), vjust = -0.5) +
-  ylim(0, 96000) +
+  geom_text(size = 7, 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.2,
+            lineheight = 0.8) +
+  scale_y_continuous(
+    limits = c(0, 120000), # Set y-axis range
+    breaks = seq(0, 90000, by = 30000) # Remove the last tick
+  ) +
   labs(x = "Document type",
        y = "Document count") +
-  scale_fill_manual(values = c('present' = '#00BFC4', 'absent' = '#F8766D'), #Change legend colors
+  scale_fill_manual(values = c('present' = "#2C4582", 'absent' = "#D79A1B"), #Change legend colors
                     name = "DOI", #Change legend title
                     labels = c('present' = 'Present', 'absent' = 'Absent')) + # Change legend label
-  theme(text = element_text(size = 17)) #Changing text size
+  theme(
+    # Change axis title size
+    axis.title = element_text(size = 20),
+    
+    # Change axis tick label size
+    axis.text = element_text(size = 18),
+    
+    # Change legend title size
+    legend.title = element_text(size = 20),
+    
+    
+    # Aumenta o tamanho do texto da faixa/facet
+    strip.text = element_text(size = 20, face = "bold"),
+    
+    # Change legend item label size
+    legend.text = element_text(size = 18)
+  ) #Changing text size
 
 
 plots$doi_count

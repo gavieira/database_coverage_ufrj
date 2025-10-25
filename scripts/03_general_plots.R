@@ -1,6 +1,7 @@
 #Loading libraries
 library(tidyverse)
 library(bibliometrix)
+library(viridis)
 
 #sourcing functions script
 source('scripts/00_functions.R')
@@ -11,9 +12,7 @@ dfs <- readRDS('output/data/dfs.rds')
 analyses <- readRDS('output/data/analyses.rds')
 summaries <- readRDS('output/data/summaries.rds')
 
-
 View(dfs)
-
 
 #Time to make plots
 plots <- list() #Will hold all plots
@@ -36,14 +35,21 @@ View(total_docs)
 plots$total_docs <- total_docs %>%
   ggplot(aes(x = fct_reorder(db, -doc_count), 
              y = doc_count, 
-             fill = db, 
-             label = paste0(doc_count, ' (', percentage, '%)') )) +
-  geom_bar(stat = 'identity', position = position_dodge(), show.legend = FALSE) +
-  geom_text(position = position_dodge(width = .9), vjust = -0.3) +
+             #fill = db, 
+             label = doc_count)) +
+  geom_bar(stat = 'identity', aes(color = db), position = position_dodge(), show.legend = FALSE) +
+  geom_text(position = position_dodge(width = .9), vjust = -0.3, size = 16) +
+  scale_y_continuous(limits = c(0, 117000)) +
+  scale_color_manual(values = grayscale_colorblind) + 
   labs(x = "Database", 
-       y = "Document count")
+       y = "Document count") +
+  theme(axis.text.x = element_text(size = 30),
+        axis.text.y = element_text(size = 30),                                      # Y-axis text size
+        axis.title.x = element_text(size = 40),                                     # X-axis label size
+        axis.title.y = element_text(size = 40)                                     # Y-axis label size
+  )
 
-plots$total_docs
+plots$total_docs 
 
 #### Annual production plot
 
@@ -54,35 +60,73 @@ annual_prod <- map2(summaries, db_names, get_info_from_summaries, attribute_name
 
 View(annual_prod)
 
-
 ##Year plots with bar lines 
 ##Stacked bars are percentages and absolute document counts appear as numbers (geom_text layers) inside the bars
-plots$annual_prod_bar <- annual_prod %>% 
-         mutate(db = )
-         group_by(year) %>% #grouping the base df it by year
-         mutate(freq = (count / sum(count)) * 100) %>% #calculating new column (frequency of documents per year for each bibliometric database)
-         ungroup()) + 
-  ggplot(aes(x = year, y = freq, fill = db)) +
-  geom_bar(stat="identity")  +
-  geom_hline(yintercept = seq(0, 100, by=25), color='white', alpha = .3) + # adding layer to make y axis lines visible over bar plot 
-  labs(x = 'Year', y = "Frequency (%)", fill = 'Database') + #changing labels
-  scale_y_continuous(breaks = seq(0, 100, by=25)) + #changing number of breaks in y axis
-  geom_text(aes(label = count), size = 3, angle = 270, position = position_stack(vjust = 0.5)) + #Adding number of documents to each bar stack
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) #Changing the angle and position of x axis labels
+annual_prod_freq <- annual_prod %>% 
+  group_by(year) %>% 
+  mutate(freq = (count / sum(count)) * 100) %>% 
+  ungroup() 
+
+View(annual_prod_freq)
+
+# Now create the basic plot (without annotation)
+annual_prod_bar_base <- ggplot(annual_prod_freq, aes(x = year, y = freq, fill = db)) +
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = seq(0, 100, by = 25), color = 'white', alpha = 0.3) + 
+  labs(x = 'Year', y = "Frequency (%)", fill = 'Database') + 
+  scale_y_continuous(breaks = seq(0, 100, by = 25)) +
+  #geom_text(aes(label = count), size = 6, angle = 270, position = position_stack(vjust = 0.5)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 12),                                      # Y-axis text size
+        axis.title.x = element_text(size = 20),                                     # X-axis label size
+        axis.title.y = element_text(size = 20),                                     # Y-axis label size
+        legend.title = element_text(size = 12, face = 'bold'),                                     # Legend title size
+        legend.text = element_text(size = 12),                                      # Legend text size
+        legend.key.size = unit(1.5, 'lines')
+  ) 
+
+
+#Adding text to bars (count)
+plots$annual_prod_bar <- annual_prod_bar_base +
+  geom_text(aes(label = count), size = 6, angle = 270, position = position_stack(vjust = 0.5))
   
-plots$annual_prod_bar
+plots$annual_prod_bar  
+  
+
+#Additional plot (count + percentages)
+annual_prod_bar_base +
+  geom_text(aes(label = paste0(count, " (", round(freq), "%)")), size = 6, angle = 270, position = position_stack(vjust = 0.5))
+
+
+      
+#plots$annual_prod_bar + scale_fill_manual(values = c("#2C4582", "#4C8C5C", "#D79A1B", "#E1D1A5"))
+
 
 # Generating year plot with lines and points (absolute document count)
 plots$annual_prod_line <- ggplot(annual_prod) +
-  aes(x = year, y = count, group = db, color = db) +
-  geom_line() +
-  geom_point() +
+  aes(x = year, y = count, group = db) +  # Map color to `db` for lines
+  geom_line(linewidth = 1, aes(color = db)) +
+  geom_point(aes(shape = db, fill = db), size = 4, stroke = 1) +  # Map shape and fill to `db` for points
+  scale_color_manual(values = grayscale_colorblind) +  # Color for lines
+  scale_fill_manual(values = grayscale_colorblind) +   # Fill for points
+  scale_shape_manual(values = c(21, 22, 23, 24, 25)) +  # Use shapes 21-25 for points (they support borders)
   labs(x = 'Year',
        y = 'Document count',
-       color = 'Database') +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+       color = 'Database',  # Legend title for color (lines)
+       shape = 'Database',  # Legend title for shape (points)
+       fill = 'Database') + # Legend title for fill (points)
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 12),
+        axis.text.y = element_text(size = 14),                                      # Y-axis text size
+        axis.title.x = element_text(size = 20),                                     # X-axis label size
+        axis.title.y = element_text(size = 20),                                     # Y-axis label size
+        legend.title = element_text(size = 12, face = 'bold'),                      # Legend title size
+        legend.text = element_text(size = 12),                                      # Legend text size
+        legend.key.size = unit(1.5, 'lines'))                                       # Legend key size (box size)
 
 plots$annual_prod_line
+
+
+############################### KEEP GOING FROM HERE TOMORROW!!!!! ####################################
 
 #Plots from the 'MainInformationDF' summary attribute
 
@@ -156,6 +200,7 @@ ggplot( aes(x = id, y = result, color = db) ) +
   scale_x_discrete(breaks = doctypes$id,
                    labels = doctypes$description) + #Changing x-axis label names
   scale_y_continuous(expand = expansion(mult = .1)) + #Expanding y scale to fit number of documents over each bar stack
+  scale_color_manual(values = grayscale_colorblind) +
   labs(x = 'Document type',
        y = 'Document count') +
   theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1),  legend.position = "none")
@@ -236,17 +281,32 @@ View(norm_doctypes)
 
 plots$doctypes_bar_normalized <- norm_doctypes %>%
   filter(doc_count != 0) %>%  # Filter out rows where doc_count is 0 (to have no thin color bar for when this happens)
-  ggplot(aes(x = DT, y = doc_count, color = db )) +
+  ggplot(aes(x = DT, y = doc_count)) +
   facet_grid(vars(db)) +
   #facet_grid(vars(factor(db, levels = c('Lens', 'Scopus', 'Dimensions', 'WoS')))) +
-  geom_bar(stat='identity', position = position_dodge(), show.legend = FALSE) +
-  geom_text(data = norm_doctypes, aes(label = paste0(doc_count, ' (', percentage, '%)')), position = position_dodge(width = .9), color = 'black', vjust = -0.3) + #reusing original data to add 0 using this geom
-  ylim(0, 95000) +
+  geom_bar(stat='identity', aes(color = db), position = position_dodge(), show.legend = FALSE) +
+  geom_text(data = norm_doctypes, aes(label = paste0(doc_count, ' (', percentage, '%)')), position = position_dodge(width = .9), color = 'black', vjust = -0.5, size = 12) + #reusing original data to add 0 using this geom
+  ylim(0, 110000) +
+  scale_color_manual(values = grayscale_colorblind) +
   labs(x = "Document types",
        y = "Document count",
-       fill = 'Dataset')
+       fill = 'Dataset') +
+  theme(axis.text.x = element_text(size = 20, face = 'bold'),  
+        legend.position = "none",
+        axis.text.y = element_blank(),                                      # Y-axis text size
+        axis.title.x = element_text(size = 20, vjust = -0.5, face = 'bold'),                                     # X-axis label size
+        axis.title.y = element_text(size = 20, face = 'bold'),                                     # Y-axis label size
+        strip.text = element_text(size = 20),
+        axis.line.y = element_blank(),                       # Remover linha do eixo Y
+        panel.grid.y = element_blank(),                      # Remover grade do eixo Y
+        panel.grid.major.y = element_blank(),                # Remover grade maior do eixo Y
+        panel.grid.major.x = element_blank(),                # Remover grade maior do eixo Y
+        panel.grid.minor.y = element_blank(),                 # Remover grade menor do eixo Y
+        axis.ticks.y = element_blank()                      # Remover ticks do eixo Y
+  )
 
-plots$doctypes_bar_normalized 
+
+plots$doctypes_bar_normalized
 
 
 #lapply(norm_raw_dfs, function(df) unique(df$DT))

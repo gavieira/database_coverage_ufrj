@@ -12,8 +12,6 @@ dfs <- readRDS('output/data/dfs.rds')
 normalized_dfs <- lapply(dfs, function(df) normalize_df(df))
 
 
-View(normalized_dfs)
-
 saveRDS(normalized_dfs, file = 'output/data/normalized_dfs.rds')
 
 
@@ -74,19 +72,36 @@ plots$citation_histogram <- citation_data %>%
                linetype = 'dashed') + # Add density plot
   geom_text(aes(label = after_stat(count)), 
             stat = 'bin', breaks = c(0, 1, seq(5,100, by=5), 105), closed = 'left',
-            size = 3, 
+            size = 5, 
             nudge_y = 1500,
             hjust = rep(c(.9, rep(0.5, 21)), 4), # Nudging the first label of each facet a little bit to the left
             ) + #Adding number of documents to each bar stack
   facet_wrap(~ db, scale = 'free_x',  ncol = 1) +
   scale_x_continuous(breaks = c(1,seq(5,100, by=5), 105),
                      labels = c(1,seq(5,100, by=5), 'Inf')) +
+  scale_fill_manual(values = rev(grayscale_colorblind[1:5])) +  # Reverse color palette
   labs(x = 'Number of citations', 
        y = 'Document count',
        fill = 'Decade') +
-  theme(panel.grid.minor.x = element_blank())
+  theme(panel.grid.minor.x = element_blank(),
+        # Change axis title size
+        axis.title = element_text(size = 18),
+        
+        # Change axis tick label size
+        axis.text = element_text(size = 16),
+        
+        # Change legend title size
+        legend.title = element_text(size = 18),
 
-plots$citation_histogram
+        
+        # Aumenta o tamanho do texto da faixa/facet
+        strip.text = element_text(size = 18, face = "bold"),
+        
+        # Change legend item label size
+        legend.text = element_text(size = 16)
+        )
+
+plots$citation_histogram 
 
 
 #View all bars to make sure that the most common documents are the ones without citation
@@ -104,6 +119,7 @@ citation_data %>%
   facet_wrap(~ db, scale = 'free_x', ncol = 1) +
   scale_x_continuous(breaks = c(1,seq(5,100, by=5), 105),
                      labels = c(1,seq(5,100, by=5), 'Inf')) +
+  scale_fill_manual(values = rev(grayscale_colorblind[1:5])) +  # Reverse color palette
   labs(x = 'Number of citations', 
        y = 'Document count',
        fill = 'Decade') +
@@ -120,7 +136,7 @@ citation_metrics <- citation_data %>%
             eindex = eindex(citations),
             gindex = gindex(citations),
             hcindex = hcindex(citations = citations, pubyear = year),
-            i10index = sum(citations > 10) )
+            i10index = sum(citations >= 10) )
 
 
 #saveRDS(citation_metrics, 'output/data/citation_metrics.rds') #Saving citation metrics to a .rds file
@@ -180,6 +196,52 @@ citation_decade_summary %>%
 #  labs(alpha = 'mean_citations')
 #
 #plots$decade_prod_mean_citations
+plots$decade_prod_facets <- citation_decade_summary %>% 
+  ggplot(aes(x = decade, y = index_value)) +
+  
+  # Add dashed lines with color mapped to `db`
+  geom_line(aes(group = db, color = db), size = 0.8, linetype = 2) + # Dashed colored line on top
+  
+  # Add points with black outlines, colored fills, and different shapes for each `db`
+  geom_point(aes(fill = db, shape = db), size = 3, stroke = 1, color = "black") +
+  
+  # Customize colors and shapes
+  scale_fill_manual(values = grayscale_colorblind) + # Fill color for points
+  scale_color_manual(values = grayscale_colorblind) + # Line colors
+  scale_shape_manual(values = c(21, 22, 23, 24, 25)) + # Shapes 21-25 for points (they support borders)
+  
+  # Labels and facets
+  labs(x = 'Decade', y = 'Index value', 
+       color = 'Database', 
+       fill = 'Database', 
+       shape = 'Database') + # Use the same legend title for all aesthetics
+  facet_wrap(~ index_type, scales = 'free', ncol = 2) +
+  
+  # Theme adjustments
+  theme(
+    axis.text.x = element_text(size = 20, face = 'bold'),  
+    panel.grid.minor.x = element_blank(),
+    axis.text.y = element_text(size = 20),                                      
+    axis.title.x = element_text(size = 20, vjust = -0.5, face = 'bold'),                                    
+    axis.title.y = element_text(size = 20, face = 'bold'),                                     
+    strip.text = element_text(size = 20),
+    axis.line.y = element_blank(),                       
+    panel.grid.y = element_blank(),                      
+    panel.grid.minor.y = element_blank(),                 
+    axis.ticks.y = element_blank(),                      
+    legend.title = element_text(size = 13, face = 'bold'),                                    
+    legend.text = element_text(size = 13),                                      
+    legend.key.size = unit(1.5, 'lines')                                       
+  )
+
+plots$decade_prod_facets
+
+plots$decade_prod_facets + theme(
+  legend.position = "bottom", # Move legend to the bottom
+  legend.text = element_text(size = 20), # Increase legend text size
+  legend.title = element_text(size = 20, face = "bold"), # Increase legend title size and make it bold
+  legend.key.size = unit(1.5, "lines") # Increase the size of legend keys
+)
 
 
 plots$decade_prod_facets <- citation_decade_summary %>% 
@@ -189,7 +251,7 @@ plots$decade_prod_facets <- citation_decade_summary %>%
   #geom_smooth(aes(group = db), se = F, alpha = .8) +
   geom_line(aes(group = db), linetype = 2, alpha = .8) +
   labs(x = 'Decade', y = 'Index value', color = 'Database') +
-  facet_wrap(~ index_type, scales = 'free', ncol = 2, 
+  facet_wrap(~ index_type, scales = 'free', ncol = 1, 
              labeller = labeller(index_type = function(label) ifelse(label == "n_docs", "n_articles", label))) #Changing title of 'n_docs' 
 #theme(axis.text.x = element_text(angle = 45,  hjust = 1, vjust = 1))
 
