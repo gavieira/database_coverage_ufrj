@@ -236,8 +236,8 @@ doctypes_normalized <- doctypes %>%
                        'article; data paper; early access', 'reprint') ~ 'Articles',
     description %in% c('proceeding', 'conference proceedings article', 'conference proceedings', 
                        'conference paper', 'conference review', 'proceedings paper', 'meeting abstract',
-                       'article; proceedings paper') ~ 'Proceedings itens', 
-    description %in% c('book', 'book chapter', 'chapter', 'article; book chapter', 'review; book chapter') ~ 'Books and book chapters', #Does not include book reviews
+                       'article; proceedings paper') ~ 'Proceedings items', 
+    description %in% c('book', 'book chapter', 'chapter', 'article; book chapter', 'review; book chapter') ~ 'Books and chapters', #Does not include book reviews
     description %in%  c('unidentified') ~ 'Unidentified', 
     description %in%  c('preprint') ~ 'Preprint',
     .default = 'Other')) %>% #Adding a last value to aggregate all other doctypes
@@ -269,7 +269,7 @@ cat(paste("'", unique(doctypes$description[!doctypes$description %in% c('article
 
 norm_doctypes <- lapply(dfs, function(df) normalize_df(df)) %>%
   get_doctype_count_df() %>%
-  mutate(DT = factor(DT, levels = c('Articles', 'Proceedings itens', 'Books and book chapters', 'Preprint', 'Unidentified', 'Other'))) %>% #Ordering factors
+  mutate(DT = factor(DT, levels = c('Articles', 'Proceedings', 'Books and chapters', 'Preprint', 'Unidentified', 'Other'))) %>% #Ordering factors
   group_by(db) %>%
   mutate(percentage = round( (doc_count / sum(doc_count)) * 100, digits = 1  )) #Calculating percentage column
   

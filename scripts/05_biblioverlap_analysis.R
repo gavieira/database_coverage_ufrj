@@ -41,6 +41,8 @@ doi_count <- bind_rows(doi_dt, doi_all) %>% #Merging the two tables, and adding 
 View(doi_count)
 
 plots$doi_count <- doi_count %>% #Making a faceted barplot for DOi presence/absence in each database
+  mutate(DT = factor(DT, levels = c('All', 'Articles', 'Proceedings', 'Books and chapters', 'Preprint', 'Unidentified', 'Other'))) %>% #Ordering factors
+  
   ggplot(aes(x = DT, y = ifelse(between(count, 1, 600), 600, count),  count, 
              fill = doi, 
              label = ifelse(is.na(perc) | perc == 0, count, paste0(count, '\n(', perc,'%)') ) ) ) +
@@ -111,8 +113,8 @@ matching_cols <- list(DI = 'DI',
 
 
 ##Running biblioverlap function and saving the results to a rds file
-#biblioverlap_results <- biblioverlap(db_list, matching_fields = matching_cols, n_threads = 16)
-#saveRDS(biblioverlap_results, 'output/data/biblioverlap_results.rds')
+biblioverlap_results <- biblioverlap(db_list, matching_fields = matching_cols, n_threads = 16) 
+saveRDS(biblioverlap_results, 'output/data/biblioverlap_results.rds')
 
 #####Making biblioverlap plots
 
@@ -127,7 +129,7 @@ db_list_matched <- biblioverlap_results$db_list #saving db_list from biblioverla
 View(db_list_matched)
 
 ##Venn diagram for several doctypes
-doctypes <- c("All", "Articles", "Proceedings itens", "Books and book chapters", "Other")
+doctypes <- c("All", "Articles", "Proceedings", "Books and book chapters", "Other")
 
 venn_subset_matches <- lapply(doctypes, function(doctype) venn_by_doctype(doctype, db_list_matched, all_matches = FALSE)) #Creating venn diagram for each doctype (only shows matches within given subset)
 names(venn_subset_matches) <- doctypes #Adding name to each plot
@@ -163,7 +165,7 @@ venn_all_matches$hcore
 
 
 
-venn_order <- c("All", "Articles", "hcore", "Proceedings itens", "Books and book chapters", "Other")
+venn_order <- c("All", "Articles", "hcore", "Proceedings", "Books and book chapters", "Other")
 
 ### Plotting all Venn Diagrams in a single grid - saving them to the plots list
 plots$venn_subset_matches <- wrap_plots(venn_subset_matches[venn_order], ncol = 3, ) + plot_annotation(tag_levels = 'A', tag_suffix = ')') &

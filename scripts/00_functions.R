@@ -118,8 +118,8 @@ normalize_df <- function(df) {
                        'ARTICLE; DATA PAPER; EARLY ACCESS', 'REPRINT') ~ 'Articles',
              DT %in% c('PROCEEDING', 'CONFERENCE PROCEEDINGS ARTICLE', 'CONFERENCE PROCEEDINGS', 
                        'CONFERENCE PAPER', 'CONFERENCE REVIEW', 'PROCEEDINGS PAPER', 'MEETING ABSTRACT',
-                       'ARTICLE; PROCEEDINGS PAPER') ~ 'Proceedings itens', 
-             DT %in% c('BOOK', 'BOOK CHAPTER', 'CHAPTER', 'ARTICLE; BOOK CHAPTER', 'REVIEW; BOOK CHAPTER') ~ 'Books and book chapters', #Does not include book reviews
+                       'ARTICLE; PROCEEDINGS PAPER') ~ 'Proceedings', 
+             DT %in% c('BOOK', 'BOOK CHAPTER', 'CHAPTER', 'ARTICLE; BOOK CHAPTER', 'REVIEW; BOOK CHAPTER') ~ 'Books and chapters', #Does not include book reviews
              DT %in%  c('UNIDENTIFIED') ~ 'Unidentified', 
              DT %in%  c('PREPRINT') ~ 'Preprint',
              .default = 'Other')) #Adding a last value to aggregate all other DTs
